@@ -7,7 +7,6 @@
 <p align="left">
   <img src="https://img.shields.io/badge/node-18.x-informational" alt="Node.js 18">
   <img src="https://img.shields.io/badge/docker-ready-blue" alt="Docker Ready">
-  <img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="MIT License">
 </p>
 
 ---
@@ -219,22 +218,6 @@ The badge in this README reflects the live status.
 - [ ] Redis cache / queues  
 - [ ] Expanded test suite  
 - [ ] Deployment config  
-
----
-
-## 🤝 Contributing
-
-1. Fork the repo  
-2. Create a branch: `git checkout -b feature/my-feature`  
-3. Commit: `git commit -m "Add feature"`  
-4. Push: `git push origin feature/my-feature`  
-5. Open a Pull Request  
-
----
-
-## 📄 License
-
-MIT License — free for use, modification, and distribution.
 
 ---
 
