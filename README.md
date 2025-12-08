@@ -5,15 +5,10 @@
 ---
 
 <p align="left">
-  <a href="https://github.com/your-username/convad/actions/workflows/ci.yml">
-    <img src="https://github.com/your-username/convad/actions/workflows/ci.yml/badge.svg" alt="CI Status">
-  </a>
   <img src="https://img.shields.io/badge/node-18.x-informational" alt="Node.js 18">
   <img src="https://img.shields.io/badge/docker-ready-blue" alt="Docker Ready">
   <img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="MIT License">
 </p>
-
-> Replace `your-username` in the CI badge URL with your actual GitHub username.
 
 ---
 
@@ -53,9 +48,6 @@ convad/
 ├── src/
 │   └── index.js              # Main server entrypoint
 │
-├── tests/
-│   └── smoke.test.js         # Basic smoke test for CI
-│
 ├── Dockerfile                # Builds the runtime image
 ├── docker-compose.yml        # Dev/prod container orchestration
 ├── package.json              # Node metadata + scripts
@@ -71,11 +63,9 @@ convad/
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/convad.git
+git clone https://github.com/Gurkiratjot17/CONVAD.git
 cd convad
 ```
-
-> Don’t forget to replace `your-username` with your GitHub handle.
 
 ---
 
@@ -205,25 +195,12 @@ The badge in this README reflects the live status.
 
 ---
 
-## 🧪 Tests
-
-CONVAD includes a minimal **smoke test**:
-
-- Ensures Node works  
-- Ensures the server entrypoint loads  
-- Ensures CI passes  
-
-This keeps quality consistent while the codebase grows.
-
----
-
 ## 🧭 Roadmap
 
 ### Phase 1 — Foundation (current)
 - ✅ Express scaffold  
 - ✅ Docker setup  
-- ✅ CI pipeline  
-- ✅ Smoke tests  
+- ✅ CI pipeline   
 
 ### Phase 2 — Core API
 - [ ] Conversations API  
@@ -271,3 +248,14 @@ CONVAD aims to build the next generation of **AI-powered conversational advertis
 - Expandable architecture  
 
 This repository represents **Phase 1** of the evolving system.
+
+---
+
+## Contact
+
+For any inquiries or suggestions, feel free to reach out to the project team:
+
+- **Developers**: Gurkiratjot Singh
+- **Emails**: gurkiratjotsingh17@gmail.com
+
+--- 
