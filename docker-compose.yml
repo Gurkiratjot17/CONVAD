@@ -1,11 +1,10 @@
-version: "3.8"
 services:
   web:
     build: .
-    container_name: fyp-node-web
+    container_name: convad-web
     ports:
       - "3000:3000"
-    environment:
-      - NODE_ENV=development
-    
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
     command: npm run dev
