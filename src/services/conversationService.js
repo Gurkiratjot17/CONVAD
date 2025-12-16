@@ -1,18 +1,21 @@
 const { randomUUID } = require("crypto");
+const LLMService = require("./LLMService");
+
 
 const InMemoryConversationRepository = require("../repositories/InMemoryConversationRepository");
 const IntentRouter = require("./IntentRouter");
 const TaskPlanner = require("./TaskPlanner");
 const TaskExecutor = require("./TaskExecutor");
-const ResponseComposer = require("./ResponseComposer");
+
 
 class ConversationService {
   constructor() {
+    this.llmService = new LLMService();
     this.repo = InMemoryConversationRepository.getInstance();
     this.intentRouter = new IntentRouter();
     this.taskPlanner = new TaskPlanner();
     this.taskExecutor = new TaskExecutor();
-    this.responseComposer = new ResponseComposer();
+    
   }
 
   async handleUserMessage({ userId, conversationId, text }) {
@@ -26,8 +29,14 @@ class ConversationService {
     let assistantText = "";
 
     if (intent.type === "chat") {
-      assistantText = this.responseComposer.composeChat(text, conv);
-    } else {
+      try {
+        assistantText = await this.llmService.reply({ conversation: conv });
+      } catch (e) {
+        console.error("LLM error:", e);
+        assistantText = "I couldn't reach the AI service right now. Please try again.";
+      }
+    }
+ else {
       const plan = this.taskPlanner.plan(intent, text, conv);
 
       if (plan.requiresClarification) {
