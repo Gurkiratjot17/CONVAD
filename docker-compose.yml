@@ -1,4 +1,30 @@
 services:
+  db:
+    image: mysql:8.0
+    container_name: convad-db
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT} 
+      - MYSQL_DATABASE=${DB_NAME}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - convad_mysql_data:/var/lib/mysql
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: convad-phpmyadmin
+    depends_on:
+      - db
+    ports:
+      - "8080:80"
+    environment:
+      - PMA_HOST=${DB_HOST}
+      - PMA_PORT=${DB_PORT}
+      - PMA_USER=${DB_USER}
+      - PMA_PASSWORD=${DB_PASSWORD}
+
   web:
     build: .
     container_name: convad-web
@@ -7,10 +33,19 @@ services:
     volumes:
       - .:/usr/src/app
       - /usr/src/app/node_modules
-
     environment:
       - DEBUG_KEYWORDS=${DEBUG_KEYWORDS}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_MODEL=${OPENAI_MODEL}
 
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+    depends_on:
+      - db
     command: npm run dev
+
+volumes:
+  convad_mysql_data:
