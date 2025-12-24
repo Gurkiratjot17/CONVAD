@@ -1,7 +1,8 @@
 const { randomUUID } = require("crypto");
 
 const LLMService = require("./LLMService");
-const InMemoryConversationRepository = require("../repositories/InMemoryConversationRepository");
+const MySqlConversationRepository = require("../repositories/MySqlConversationRepository");
+
 const IntentRouter = require("./IntentRouter");
 const TaskPlanner = require("./TaskPlanner");
 const TaskExecutor = require("./TaskExecutor");
@@ -9,14 +10,15 @@ const TaskExecutor = require("./TaskExecutor");
 class ConversationService {
   constructor() {
     this.llmService = new LLMService();
-    this.repo = InMemoryConversationRepository.getInstance();
+    this.repo = new MySqlConversationRepository(); // ✅ use MySQL repo
     this.intentRouter = new IntentRouter();
     this.taskPlanner = new TaskPlanner();
     this.taskExecutor = new TaskExecutor();
   }
 
   async handleUserMessage({ userId, conversationId, text }) {
-    const conv = this._createOrLoadConversation({ userId, conversationId });
+    // ✅ async load/create
+    const conv = await this._createOrLoadConversation({ userId, conversationId });
 
     const userMsg = this._makeMessage("user", text);
     conv.messages.push(userMsg);
@@ -24,38 +26,31 @@ class ConversationService {
     const intent = this.intentRouter.route(text, conv);
 
     let assistantText = "";
-    let pendingKeywords = undefined;
-    let pendingLLMMeta = undefined;
+    let pendingKeywords;
+    let pendingLLMMeta;
 
     if (intent.type === "chat") {
       try {
-        // NEW: get normal reply + backend keywords (not shown to user)
         const { reply, keywords, meta } = await this.llmService.replyWithKeywords({
           conversation: conv,
         });
 
         assistantText = reply;
 
-        // Store keywords at conversation level (latest)
         conv.meta = conv.meta || {};
         conv.meta.lastKeywords = keywords;
 
         pendingKeywords = keywords;
         pendingLLMMeta = meta;
 
-        // DEBUG: print keywords to terminal
         if (process.env.DEBUG_KEYWORDS === "true") {
-          console.log("[KEYWORDS]", {
-            conversationId: conv.id,
-            keywords,
-          });
+          console.log("[KEYWORDS]", { conversationId: conv.id, keywords });
         }
       } catch (e) {
         console.error("LLM error:", e);
         assistantText = "I couldn't reach the AI service right now. Please try again.";
       }
     } else {
-      // Task path (deterministic tools)
       const plan = this.taskPlanner.plan(intent, text, conv);
 
       if (plan.requiresClarification) {
@@ -77,32 +72,31 @@ class ConversationService {
 
     const assistantMsg = this._makeMessage("assistant", assistantText);
 
-    // NEW: attach keywords + OpenAI usage to the assistant message meta
     assistantMsg.meta = assistantMsg.meta || {};
     if (typeof pendingKeywords !== "undefined") assistantMsg.meta.keywords = pendingKeywords;
     if (typeof pendingLLMMeta !== "undefined") assistantMsg.meta.openai = pendingLLMMeta;
 
     conv.messages.push(assistantMsg);
 
-    this.repo.save(conv);
+    // ✅ save to MySQL
+    await this.repo.saveConversation(conv);
 
     return {
       conversationId: conv.id,
       messages: conv.messages,
       lastReply: assistantMsg,
       intent,
-      // DO NOT return keywords to client unless debugging
-      // debug: { keywords: assistantMsg.meta.keywords }
     };
   }
 
   async getConversation(conversationId) {
-    return this.repo.load(conversationId);
+    // ✅ load from MySQL
+    return this.repo.loadConversation(conversationId);
   }
 
-  _createOrLoadConversation({ userId, conversationId }) {
+  async _createOrLoadConversation({ userId, conversationId }) {
     if (conversationId) {
-      const existing = this.repo.load(conversationId);
+      const existing = await this.repo.loadConversation(conversationId);
       if (existing) return existing;
     }
 
@@ -112,10 +106,10 @@ class ConversationService {
       userId,
       createdAt: new Date().toISOString(),
       messages: [],
-      meta: {}, // NEW: conversation-level metadata
+      meta: {},
     };
 
-    this.repo.save(conv);
+    await this.repo.saveConversation(conv);
     return conv;
   }
 
