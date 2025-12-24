@@ -7,24 +7,18 @@ class OpenAIClient {
   }
 
   _assertConfigured() {
-    if (!this.apiKey) {
-      throw new Error("OPENAI_API_KEY is not set. Add it to your environment/.env file.");
-    }
+    if (!this.apiKey) throw new Error("OPENAI_API_KEY is not set.");
   }
 
-  /**
-   * Uses the Responses API (recommended for new projects).
-   * Docs: /v1/responses
-   */
-  async generateText({ system, messages }) {
+  async generateJSON({ system, messages }) {
     this._assertConfigured();
 
-    // Build a compact text input from conversation messages
     const transcript = messages
       .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
       .join("\n");
 
-    const input = `${system}\n\n${transcript}\n\nASSISTANT:`;
+    // IMPORTANT: We ask for JSON only.
+    const input = `${system}\n\n${transcript}\n\nReturn ONLY valid JSON.`;
 
     const res = await fetch(`${this.baseUrl}/responses`, {
       method: "POST",
@@ -45,15 +39,13 @@ class OpenAIClient {
 
     const data = await res.json();
 
-    // Responses API provides output text; simplest robust extraction:
-    // Many SDKs expose output_text helper; here we parse common shape.
-    const outputText =
+    const raw =
       data.output_text ||
       data.output?.[0]?.content?.[0]?.text ||
       data.output?.[0]?.content?.[0]?.value ||
       "";
 
-    return String(outputText).trim();
+    return { raw: String(raw).trim(), usage: data.usage || {}, model: data.model, responseId: data.id };
   }
 }
 
