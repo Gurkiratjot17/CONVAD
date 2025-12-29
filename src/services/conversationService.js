@@ -1,125 +1,67 @@
-const { randomUUID } = require("crypto");
-
+const ConversationRepository = require("../repositories/ConversationRepository");
 const LLMService = require("./LLMService");
-const MySqlConversationRepository = require("../repositories/MySqlConversationRepository");
-
-const IntentRouter = require("./IntentRouter");
-const TaskPlanner = require("./TaskPlanner");
-const TaskExecutor = require("./TaskExecutor");
 
 class ConversationService {
   constructor() {
-    this.llmService = new LLMService();
-    this.repo = new MySqlConversationRepository(); // ✅ use MySQL repo
-    this.intentRouter = new IntentRouter();
-    this.taskPlanner = new TaskPlanner();
-    this.taskExecutor = new TaskExecutor();
+    this.repo = new ConversationRepository();
+    this.llm = new LLMService();
   }
 
-  async handleUserMessage({ userId, conversationId, text }) {
-    // ✅ async load/create
-    const conv = await this._createOrLoadConversation({ userId, conversationId });
-
-    const userMsg = this._makeMessage("user", text);
-    conv.messages.push(userMsg);
-
-    const intent = this.intentRouter.route(text, conv);
-
-    let assistantText = "";
-    let pendingKeywords;
-    let pendingLLMMeta;
-
-    if (intent.type === "chat") {
-      try {
-        const { reply, keywords, meta } = await this.llmService.replyWithKeywords({
-          conversation: conv,
-        });
-
-        assistantText = reply;
-
-        conv.meta = conv.meta || {};
-        conv.meta.lastKeywords = keywords;
-
-        pendingKeywords = keywords;
-        pendingLLMMeta = meta;
-
-        if (process.env.DEBUG_KEYWORDS === "true") {
-          console.log("[KEYWORDS]", { conversationId: conv.id, keywords });
-        }
-      } catch (e) {
-        console.error("LLM error:", e);
-        assistantText = "I couldn't reach the AI service right now. Please try again.";
-      }
-    } else {
-      const plan = this.taskPlanner.plan(intent, text, conv);
-
-      if (plan.requiresClarification) {
-        assistantText = `To run **${plan.toolName}**, I still need: ${plan.missingParams.join(
-          ", "
-        )}.`;
-      } else {
-        const result = await this.taskExecutor.execute(plan);
-
-        if (!result.ok) {
-          assistantText = `Task **${plan.toolName}** failed: ${result.error || "unknown error"}`;
-        } else {
-          assistantText =
-            result.summary ||
-            `Task **${plan.toolName}** completed.\n\n${JSON.stringify(result.data, null, 2)}`;
-        }
-      }
+  async sendMessage({ userId, conversationId, text }) {
+    let convId = conversationId ? Number(conversationId) : null;
+    if (conversationId && Number.isNaN(convId)) {
+      throw new Error("conversationId must be numeric");
     }
 
-    const assistantMsg = this._makeMessage("assistant", assistantText);
+    if (!convId) {
+      convId = await this.repo.createConversation({ userId, title: null });
+    }
 
-    assistantMsg.meta = assistantMsg.meta || {};
-    if (typeof pendingKeywords !== "undefined") assistantMsg.meta.keywords = pendingKeywords;
-    if (typeof pendingLLMMeta !== "undefined") assistantMsg.meta.openai = pendingLLMMeta;
+    await this.repo.addMessage({
+      conversationId: convId,
+      role: "user",
+      content: text,
+    });
 
-    conv.messages.push(assistantMsg);
+    const convForLLM = await this.repo.getConversation(convId);
+    const { reply } = await this.llm.reply({ conversation: this._toLLMConv(convForLLM) });
 
-    // ✅ save to MySQL
-    await this.repo.saveConversation(conv);
+    await this.repo.addMessage({
+      conversationId: convId,
+      role: "assistant",
+      content: reply,
+    });
 
-    return {
-      conversationId: conv.id,
-      messages: conv.messages,
-      lastReply: assistantMsg,
-      intent,
-    };
+    const updated = await this.repo.getConversation(convId);
+
+    // Auto-title based on first user message if missing
+    if (!updated.title) {
+      const firstUser = updated.messages.find((m) => m.role === "user")?.content || "";
+      const title = firstUser.trim().slice(0, 60);
+      if (title) await this.repo.updateTitle(convId, title);
+      return this.repo.getConversation(convId);
+    }
+
+    return updated;
   }
 
   async getConversation(conversationId) {
-    // ✅ load from MySQL
-    return this.repo.loadConversation(conversationId);
+    const id = Number(conversationId);
+    if (Number.isNaN(id)) throw new Error("conversationId must be numeric");
+    return this.repo.getConversation(id);
   }
 
-  async _createOrLoadConversation({ userId, conversationId }) {
-    if (conversationId) {
-      const existing = await this.repo.loadConversation(conversationId);
-      if (existing) return existing;
-    }
-
-    const id = conversationId || randomUUID();
-    const conv = {
-      id,
-      userId,
-      createdAt: new Date().toISOString(),
-      messages: [],
-      meta: {},
-    };
-
-    await this.repo.saveConversation(conv);
-    return conv;
+  async listConversations(userId) {
+    return this.repo.listConversations(userId);
   }
 
-  _makeMessage(role, content) {
+  // Convert DB conversation shape into the shape LLMService expects
+  _toLLMConv(dbConv) {
     return {
-      id: randomUUID(),
-      role,
-      content,
-      timestamp: new Date().toISOString(),
-      meta: {},
+      messages: (dbConv?.messages || []).map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
     };
   }
 }

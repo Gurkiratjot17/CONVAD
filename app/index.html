@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CONVAD</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="brand">CONVAD</div>
+        <button id="newChatBtn" class="btn secondary">New</button>
+      </div>
+      <div id="conversationList" class="conversation-list"></div>
+    </aside>
+
+    <main class="chat">
+      <div class="chat-header">
+        <div id="chatTitle" class="chat-title">New chat</div>
+      </div>
+
+      <div id="messages" class="messages"></div>
+
+      <div class="composer">
+        <textarea id="textInput" rows="1" placeholder="Message CONVAD..."></textarea>
+        <button id="sendBtn" class="btn primary">Send</button>
+      </div>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

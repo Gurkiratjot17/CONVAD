@@ -1,17 +1,16 @@
 const express = require("express");
 const path = require("path");
 
-const routes = require("./routes");
+const api = require("./routes/api");
 
 const app = express();
 
-// Middleware
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 
-// Static UI (Option A)
-app.use(express.static(path.join(__dirname, "public")));
+// Serve your ChatGPT-style UI from /app folder (repo root)
+app.use(express.static(path.join(__dirname, "..", "app")));
 
-// API routes
-app.use("/", routes);
+// API
+app.use("/api", api);
 
 module.exports = app;
