@@ -209,7 +209,9 @@ OPENAI_MODEL=gpt-4o-mini
 
 This project explores the question:
 
+```
 How can conversational intent be inferred and operationalised in real-time systems without disrupting user experience?
+```
 
 Rather than focusing only on AI outputs, CONVAD emphasises:
 
