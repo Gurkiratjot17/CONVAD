@@ -1,9 +1,5 @@
 # ＣＯＮＶＡＤ
 
-*Conversational Advertising Engine – early-stage product backend*
-
----
-
 <p align="left">
   <img src="https://img.shields.io/badge/node-18.x-informational" alt="Node.js 18">
   <img src="https://img.shields.io/badge/docker-ready-blue" alt="Docker Ready">
@@ -13,17 +9,10 @@
 
 ## 🚀 Overview
 
-CONVAD is a containerized Node.js backend designed to power interactive, AI-driven advertising experiences.
+CONVAD is a full-stack conversational AI platform that combines **LLM-driven chat**, **session-based authentication**, and **context-aware advertising infrastructure**.  
+It is designed as a realistic prototype for exploring how **user intent in conversations** can be leveraged to deliver relevant ads without breaking conversational flow.
 
-It currently provides:
-
-- A clean Express server scaffold
-- Dockerized runtime
-- Health check endpoint
-- CI pipeline for build & test
-- A foundation for future conversational ad logic and integrations
-
-The goal is to evolve CONVAD from a backend prototype into a real product backend that supports conversational ad flows, dynamic personalization, and analytics.
+This project was developed as part of a **Final Year Project (FYP)** and focuses on **system design, backend architecture, streaming UX, and data persistence**, rather than just prompt engineering.
 
 ---
 
@@ -39,36 +28,118 @@ The goal is to evolve CONVAD from a backend prototype into a real product backen
 
 ---
 
-## 📁 Project Structure
+## 🚀 Key Features
 
-```bash
-convad/
-│
-├── src/
-│   └── index.js              # Main server entrypoint
-│
-├── Dockerfile                # Builds the runtime image
-├── docker-compose.yml        # Dev/prod container orchestration
-├── package.json              # Node metadata + scripts
-├── .dockerignore             # Keeps image clean
-├── .gitignore                # Keeps repository clean
-└── README.md                 # Project documentation
-```
+### 💬 Conversational AI
+- LLM-powered chatbot with multi-turn context
+- Token-by-token **streaming responses** (ChatGPT-style)
+- Conversation history persisted in MySQL
+- Optimistic UI updates for low-latency UX
+
+### 🔐 Authentication & Sessions
+- User **registration & login**
+- Secure password hashing
+- **Session-based authentication** using bearer tokens
+- Login sessions stored in database with expiry
+- Server-side logout + client-side token invalidation
+
+### 🗂 Conversation Management
+- Multiple conversations per user
+- Conversation list with timestamps
+- Resume conversations across sessions
+- Messages stored with role separation (user / assistant)
+
+### 📢 Advertising Infrastructure (Foundation)
+- Ads library schema (ads, tags, impressions)
+- Keyword-based matching pipeline (LLM → keywords → ads)
+- Impression tracking linked to chat messages
+- Designed for future real-time ad injection during streaming
+
+### 🎨 Frontend UI / UX
+- Clean chat interface inspired by ChatGPT
+- **Dark mode / Light mode** toggle (persisted in localStorage)
+- Fully **responsive design** (desktop + mobile)
+- Mobile sidebar drawer with backdrop
+- Typing indicators and streaming bubbles
+
+### 🐳 Dockerised Development
+- MySQL database container
+- phpMyAdmin for DB inspection
+- Node.js backend container
+- One-command startup via Docker Compose
 
 ---
 
-## 🛠 Installation & Setup
+## 🏗️ Tech Stack
 
-### 1. Clone the repository
+### Frontend
+- Vanilla HTML, CSS, JavaScript
+- Responsive CSS Grid & Flexbox
+- Server-Sent Events (SSE) for streaming
 
-```bash
-git clone https://github.com/Gurkiratjot17/CONVAD.git
-cd convad
-```
+### Backend
+- Node.js + Express
+- OpenAI API (LLM inference)
+- Streaming responses via SSE
+- Modular service-oriented architecture
+
+### Database
+- MySQL 8
+- Normalised relational schema
+- Foreign key constraints for integrity
+
+### DevOps
+- Docker & Docker Compose
+- Environment-based configuration
 
 ---
 
-## 🐳 Running with Docker (recommended)
+## 🗄️ Database Overview
+
+Core tables include:
+
+- `users` — user profiles  
+- `user_auth` — password hashes  
+- `login_sessions` — active sessions with expiry  
+- `conversations` — chat threads  
+- `messages` — individual messages  
+- `ads` — advertisement content  
+- `tags` — ad categorisation  
+- `ad_tags` — many-to-many mapping  
+- `ad_impressions` — ads shown per message  
+
+The schema is intentionally extensible to support:
+- intent tracking per session
+- ad performance analytics
+- future recommendation logic
+
+---
+
+## 🔁 Streaming Architecture (High-Level)
+
+1. User sends a message  
+2. Backend validates session  
+3. Message stored immediately  
+4. LLM response streamed token-by-token via SSE  
+5. Tokens rendered incrementally in UI  
+6. Final message persisted to database  
+7. Conversation metadata updated  
+
+This mirrors real production chat systems and avoids artificial typing delays.
+
+---
+
+## 📱 Mobile Support
+
+- Responsive layout down to phone screens
+- Sidebar collapses into a slide-out drawer
+- Backdrop interaction for accessibility
+- Touch-friendly buttons and spacing
+- Proper viewport scaling
+
+---
+
+## 🐳 Running with Docker 
 
 ### Start the service
 
@@ -79,7 +150,7 @@ docker compose up --build
 Endpoints:
 
 - Main: **http://localhost:3000/**
-- Health: **http://localhost:3000/health**
+- phpMyAdmin: **http://localhost:8080/**
 
 To stop:
 
@@ -89,148 +160,76 @@ docker compose down
 
 ---
 
-## ▶ Running locally (without Docker)
+## 🧪 Current Status
 
-```bash
-npm install
-npm run dev        # or: npm start
-```
+✅ Fully working authentication
 
-- `npm run dev` uses nodemon for auto-reload (if configured).
-- `npm start` runs the server normally.
+✅ Persistent chat with streaming
+
+✅ Responsive UI with theme switching
+
+✅ Database-backed conversations
+
+✅ Ads infrastructure ready for integration
+
+### Planned / In Progress
+
+- Real-time ad injection during streaming
+
+- Intent aggregation per session
+
+- Ad relevance scoring
 
 ---
-
-## 🧩 NPM Scripts
-
-| Script | Command         | Description               |
-|--------|-----------------|---------------------------|
-| Start  | `npm start`     | Run the Express server    |
-| Dev    | `npm run dev`   | Start with auto-reload    |
-| Test   | `npm test`      | Run smoke tests (CI)      |
-
+Basic analytics dashboard
 ---
 
-## 🔧 Configuration
+### 🔧 Configuration
 
 Environment variables can be set using a `.env` file (not committed):
 
 ```dotenv
-PORT=3000
-NODE_ENV=development
-```
+DB_HOST=?
+DB_PORT=?
+DB_NAME=?
+DB_USER=?
+DB_PASSWORD=?
+DB_ROOT=?
 
-Examples of future env vars:
-
-- `OPENAI_API_KEY`
-- `DATABASE_URL`
-- `REDIS_URL`
+OPENAI_API_KEY=your_openai_key
+OPENAI_MODEL=gpt-4o-mini
 
 > ⚠️ Never commit `.env` or secrets to Git.
-
----
-
-## 🧱 Architecture (current & near-term)
-
-CONVAD is a small but expandable Node.js service.
-
-### Current high-level flow
-
-```text
-Client ──▶ HTTP (Express) ──▶ Route handlers ──▶ Response
-                        │
-                        └──▶ /health (status + timestamp)
-```
-
-### Planned evolution
-
-- Add routing modules for:
-  - `/conversations`
-  - `/campaigns`
-  - `/analytics`
-- Add service layer
-- Add AI integrations
-- Add logging + middleware
-- Add optional database layer
-
----
-
-## 🧪 Health Endpoint
-
-**Request**
-```http
-GET /health
-```
-
-**Example response**
-```json
-{
-  "status": "ok",
-  "timestamp": "2025-01-01T00:00:00.000Z"
-}
 ```
 
 ---
 
-## ✅ Continuous Integration (CI)
+## 🎓 Academic Context
 
-### GitHub Actions
 
-A workflow at:
+This project explores the question:
 
-```
-.github/workflows/ci.yml
-```
+How can conversational intent be inferred and operationalised in real-time systems without disrupting user experience?
 
-will:
+Rather than focusing only on AI outputs, CONVAD emphasises:
 
-1. Check out the repository  
-2. Install Node.js  
-3. Install dependencies  
-4. Run tests  
-5. Build Docker image  
+- system design decisions
 
-The badge in this README reflects the live status.
+- data modelling
+
+- UX trade-offs
+
+- real-world deployment constraints
 
 ---
 
-## 🧭 Roadmap
+## 📌 Notes
 
-### Phase 1 — Foundation (current)
-- ✅ Express scaffold  
-- ✅ Docker setup  
-- ✅ CI pipeline   
+- This is a prototype, not a production ad platform
 
-### Phase 2 — Core API
-- [ ] Conversations API  
-- [ ] Campaigns API  
-- [ ] Analytics API  
-- [ ] Logging & middleware  
+- Security best practices are followed where appropriate for an academic project
 
-### Phase 3 — Intelligence
-- [ ] AI API integration  
-- [ ] Personalization logic  
-- [ ] Analytics storage  
-- [ ] Configurable models  
-
-### Phase 4 — Scaling
-- [ ] Database integration  
-- [ ] Redis cache / queues  
-- [ ] Expanded test suite  
-- [ ] Deployment config  
-
----
-
-## ⭐ Vision
-
-CONVAD aims to build the next generation of **AI-powered conversational advertising**, enabling:
-
-- Personalized, adaptive ad dialogue  
-- Real-time intelligence  
-- Easy integration  
-- Expandable architecture  
-
-This repository represents **Phase 1** of the evolving system.
+- The architecture is intentionally modular for future expansion
 
 ---
 
