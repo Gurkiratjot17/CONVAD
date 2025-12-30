@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Register — CONVAD</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <h2>Create account</h2>
+
+      <input id="firstName" placeholder="First name (optional)" />
+      <input id="lastName" placeholder="Last name (optional)" />
+      <input id="email" placeholder="Email" />
+      <input id="password" placeholder="Password (min 6)" type="password" />
+      <button id="registerBtn" class="btn primary">Register</button>
+
+      <p class="auth-meta">
+        Already have an account? <a href="/login.html">Login</a>
+      </p>
+
+      <div id="msg" class="auth-msg"></div>
+    </div>
+  </div>
+
+  <script>
+    const msg = document.getElementById("msg");
+    const registerBtn = document.getElementById("registerBtn");
+
+    registerBtn.addEventListener("click", async () => {
+      msg.textContent = "";
+
+      const body = {
+        firstName: document.getElementById("firstName").value.trim(),
+        lastName: document.getElementById("lastName").value.trim(),
+        email: document.getElementById("email").value.trim(),
+        password: document.getElementById("password").value,
+      };
+
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (!data.ok) {
+        msg.textContent = data.error || "Registration failed";
+        return;
+      }
+
+      localStorage.setItem("convad_token", data.token);
+      window.location.href = "/";
+    });
+  </script>
+</body>
+</html>

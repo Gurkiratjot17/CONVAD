@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Login — CONVAD</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <h2>Login</h2>
+
+      <input id="email" placeholder="Email" />
+      <input id="password" placeholder="Password" type="password" />
+      <button id="loginBtn" class="btn primary">Login</button>
+
+      <p class="auth-meta">
+        New here? <a href="/register.html">Create an account</a>
+      </p>
+
+      <div id="msg" class="auth-msg"></div>
+    </div>
+  </div>
+
+  <script>
+    const msg = document.getElementById("msg");
+    const loginBtn = document.getElementById("loginBtn");
+
+    loginBtn.addEventListener("click", async () => {
+      msg.textContent = "";
+
+      const body = {
+        email: document.getElementById("email").value.trim(),
+        password: document.getElementById("password").value,
+      };
+
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (!data.ok) {
+        msg.textContent = data.error || "Login failed";
+        return;
+      }
+
+      localStorage.setItem("convad_token", data.token);
+      window.location.href = "/";
+    });
+  </script>
+</body>
+</html>
