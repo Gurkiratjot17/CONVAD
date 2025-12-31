@@ -86,6 +86,78 @@ class ConversationRepository {
       [title, conversationId]
     );
   }
+
+  async getLastNMessages(conversationId, n = 20) {
+  const pool = getPool();
+  const lim = Math.max(1, Math.min(200, Number(n) || 20));
+
+  // Fetch newest N, then reverse so the LLM sees chronological order
+  const [rows] = await pool.execute(
+    `SELECT message_id, role, content, created_at
+     FROM messages
+     WHERE conversation_id = ?
+     ORDER BY created_at DESC, message_id DESC
+     LIMIT ${lim}`,
+    [conversationId]
+  );
+
+  return rows
+    .reverse()
+    .map((m) => ({
+      id: m.message_id,
+      role: m.role,
+      content: m.content,
+      createdAt: m.created_at,
+    }));
+}
+
+async getAllExceptLastN(conversationId, keepLastN = 20) {
+  const pool = getPool();
+  const lim = Math.max(0, Math.min(500, Number(keepLastN) || 20));
+
+  // Select all messages older than the newest N messages.
+  // This avoids summarizing the “working set”.
+  const [rows] = await pool.execute(
+    `
+    SELECT m.message_id, m.role, m.content, m.created_at
+    FROM messages m
+    WHERE m.conversation_id = ?
+      AND m.message_id NOT IN (
+        SELECT message_id
+        FROM messages
+        WHERE conversation_id = ?
+        ORDER BY created_at DESC, message_id DESC
+        LIMIT ${lim}
+      )
+    ORDER BY m.created_at ASC, m.message_id ASC
+    `,
+    [conversationId, conversationId]
+  );
+
+  return rows.map((m) => ({
+    id: m.message_id,
+    role: m.role,
+    content: m.content,
+    createdAt: m.created_at,
+  }));
+}
+
+async listTags() {
+  const pool = getPool();
+
+  const [rows] = await pool.execute(
+    `SELECT tag_key
+     FROM tags
+     ORDER BY tag_key ASC`
+  );
+
+  const tags = rows.map(r => r.tag_key);
+  console.log("[listTags] loaded tags:", tags);
+  return tags;
+
+}
+
+
 }
 
 module.exports = ConversationRepository;

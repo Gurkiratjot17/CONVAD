@@ -1,10 +1,15 @@
 const ConversationRepository = require("../repositories/ConversationRepository");
 const LLMService = require("./LLMService");
+const ContextBuilder = require("./ContextBuilder");
 
 class ConversationService {
   constructor() {
     this.repo = new ConversationRepository();
     this.llm = new LLMService();
+
+    this.contextBuilder = new ContextBuilder({ repo: this.repo });
+
+    this.LAST_N = 6; // pick what you want
   }
 
   async sendMessage({ userId, conversationId, text }) {
@@ -23,8 +28,14 @@ class ConversationService {
       content: text,
     });
 
-    const convForLLM = await this.repo.getConversation(convId);
-    const { reply } = await this.llm.reply({ conversation: this._toLLMConv(convForLLM) });
+    const messages = await this.contextBuilder.build({
+      conversationId: convId,
+      lastN: this.LAST_N,
+    });
+
+    
+
+    const reply = await this.llm.reply({ messages });
 
     await this.repo.addMessage({
       conversationId: convId,
@@ -34,7 +45,6 @@ class ConversationService {
 
     const updated = await this.repo.getConversation(convId);
 
-    // Auto-title based on first user message if missing
     if (!updated.title) {
       const firstUser = updated.messages.find((m) => m.role === "user")?.content || "";
       const title = firstUser.trim().slice(0, 60);
@@ -53,16 +63,6 @@ class ConversationService {
 
   async listConversations(userId) {
     return this.repo.listConversations(userId);
-  }
-
-  // Convert DB conversation shape into the shape LLMService expects
-  _toLLMConv(dbConv) {
-    return {
-      messages: (dbConv?.messages || []).map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
-    };
   }
 }
 
