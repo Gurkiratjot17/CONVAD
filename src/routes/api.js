@@ -1,11 +1,9 @@
 const express = require("express");
-const ConversationService = require("../services/conversationService");
 const StreamingChatService = require("../services/StreamingChatService");
 const { requireAuth } = require("../middleware/auth");
 
 const router = express.Router();
-const service = new ConversationService();
-const streamService = new StreamingChatService();
+const service = new StreamingChatService();
 
 router.get("/conversations", requireAuth, async (req, res) => {
   try {
@@ -56,7 +54,7 @@ router.post("/chat/stream", requireAuth, async (req, res) => {
       clearInterval(keepAlive);
     });
 
-    const result = await streamService.streamChat({
+    const result = await service.streamChat({
       userId: req.userId,
       conversationId: conversationId ?? null,
       text,
@@ -80,25 +78,5 @@ router.post("/chat/stream", requireAuth, async (req, res) => {
   }
 });
 
-
-// keep your normal endpoint
-router.post("/chat", requireAuth, async (req, res) => {
-  try {
-    const { conversationId, text } = req.body || {};
-    if (!text || typeof text !== "string") {
-      return res.status(400).json({ ok: false, error: "text is required" });
-    }
-
-    const conversation = await service.sendMessage({
-      userId: req.userId,
-      conversationId: conversationId ?? null,
-      text,
-    });
-
-    res.json({ ok: true, conversation });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
 
 module.exports = router;
