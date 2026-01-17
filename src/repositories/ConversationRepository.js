@@ -123,7 +123,6 @@ async listTags() {
   );
 
   const tags = rows.map(r => r.tag_key);
-  console.log("[listTags] loaded tags:", tags);
   return tags;
 
 }
