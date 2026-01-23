@@ -1,91 +1,113 @@
+// src/services/LLMService.js
 const OpenAIClient = require("./OpenAIClient");
-const ConversationRepository = require("../repositories/ConversationRepository");
 
 class LLMService {
   constructor() {
     this.client = new OpenAIClient();
-    this.repo = new ConversationRepository();
-
-    // cache
-    this._allowedTags = null;
-    this._allowedTagsLoadedAt = 0;
-    this._allowedTagsTtlMs = 5 * 60 * 1000; // refresh every 5 mins
   }
 
-  replyOnlySystemPrompt() {
+  /**
+   * System prompt for normal assistant replies.
+   * Accepts optional contextmessages (string or array) and injects it into the prompt.
+   */
+  replyOnlySystemPrompt({ contextmessages } = {}) {
+    const ctx = Array.isArray(contextmessages)
+      ? contextmessages.filter(Boolean).join("\n")
+      : (contextmessages ? String(contextmessages) : "");
+
     return `
 You are CONVAD, a helpful assistant.
 Return ONLY the assistant's reply as plain text.
 Do not output JSON.
+${ctx ? `\nContext:\n${ctx}\n` : ""}
 `.trim();
   }
 
-  async getAllowedTags() {
-    const now = Date.now();
-    if (this._allowedTags && (now - this._allowedTagsLoadedAt) < this._allowedTagsTtlMs) {
-      return this._allowedTags;
-    }
-
-    const tags = await this.repo.listTags(); // returns ["docker","mysql",...]
-    this._allowedTags = (tags || []).map(t => String(t).trim()).filter(Boolean);
-    this._allowedTagsLoadedAt = now;
-    return this._allowedTags;
-  }
-
-  async taggerSystemPrompt() {
-    const allowed = await this.getAllowedTags();
-    return `
-You are an intent tagger.
-Return ONLY valid JSON and nothing else.
+  /**
+   * OPTIONAL (future): Extract a structured Context Card from messages using the LLM.
+   * You are currently using a deterministic ContextExtractor, so you likely don't need this yet.
+   *
+   * Returns:
+   * {
+   *   intent: string,
+   *   keywords: string[],
+   *   phrases: string[],
+   *   summary: string,
+   *   safety: { allow_ads: boolean, restricted: string[] }
+   * }
+   */
+  async extractContextCardLLM({ messages, maxKeywords = 12, maxPhrases = 6 } = {}) {
+    const system = `
+You extract conversational context for an ad-matching system.
+Return ONLY valid JSON. No markdown, no extra text.
 
 Schema:
-{ "selected_tags": [{"tag":"string","confidence":0.0}] }
+{
+  "intent": "string",
+  "keywords": ["string"],
+  "phrases": ["string"],
+  "summary": "string",
+  "safety": { "allow_ads": true, "restricted": ["string"] }
+}
 
 Rules:
-- Choose 0–4 tags from ALLOWED_TAGS only (exact match, case-sensitive).
-- If none apply, selected_tags = [].
-- Confidence is 0.0 to 1.0.
-
-ALLOWED_TAGS:
-${allowed.join(", ")}
+- Keep summary <= 2 sentences.
+- keywords: up to ${maxKeywords}
+- phrases: up to ${maxPhrases}
+- safety.allow_ads false if the user expresses self-harm intent or crisis content.
 `.trim();
-  }
-
-  _extractJson(raw) {
-    const s = raw.indexOf("{");
-    const e = raw.lastIndexOf("}");
-    if (s === -1 || e === -1 || e <= s) return null;
-    return raw.slice(s, e + 1);
-  }
-
-  async classifyTags({ messages }) {
-    const system = await this.taggerSystemPrompt();
 
     const raw = await this.client.chat({
       system,
-      messages,
+      messages: Array.isArray(messages) ? messages : [],
     });
 
     const jsonStr = this._extractJson(raw);
-    if (!jsonStr) return [];
+    if (!jsonStr) {
+      return {
+        intent: "unknown",
+        keywords: [],
+        phrases: [],
+        summary: "",
+        safety: { allow_ads: true, restricted: [] },
+      };
+    }
 
     try {
       const parsed = JSON.parse(jsonStr);
-      const selected = Array.isArray(parsed?.selected_tags) ? parsed.selected_tags : [];
 
-      // hard-validate against allowed tags
-      const allowed = new Set((await this.getAllowedTags()));
-      return selected
-        .filter(x => x && typeof x.tag === "string")
-        .map(x => ({
-          tag: x.tag.trim(),
-          confidence: Number.isFinite(Number(x.confidence)) ? Number(x.confidence) : 0.5,
-        }))
-        .filter(x => allowed.has(x.tag))
-        .slice(0, 4);
+      return {
+        intent: typeof parsed.intent === "string" ? parsed.intent : "unknown",
+        keywords: Array.isArray(parsed.keywords) ? parsed.keywords.map(String) : [],
+        phrases: Array.isArray(parsed.phrases) ? parsed.phrases.map(String) : [],
+        summary: typeof parsed.summary === "string" ? parsed.summary : "",
+        safety: parsed.safety && typeof parsed.safety === "object"
+          ? {
+              allow_ads: parsed.safety.allow_ads !== false,
+              restricted: Array.isArray(parsed.safety.restricted)
+                ? parsed.safety.restricted.map(String)
+                : [],
+            }
+          : { allow_ads: true, restricted: [] },
+      };
     } catch {
-      return [];
+      return {
+        intent: "unknown",
+        keywords: [],
+        phrases: [],
+        summary: "",
+        safety: { allow_ads: true, restricted: [] },
+      };
     }
+  }
+
+  // ---- helpers ----
+  _extractJson(raw) {
+    const text = String(raw || "");
+    const s = text.indexOf("{");
+    const e = text.lastIndexOf("}");
+    if (s === -1 || e === -1 || e <= s) return null;
+    return text.slice(s, e + 1);
   }
 }
 
