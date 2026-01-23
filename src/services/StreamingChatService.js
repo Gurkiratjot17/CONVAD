@@ -2,6 +2,7 @@ const ConversationRepository = require("../repositories/ConversationRepository")
 const LLMService = require("./LLMService");
 const OpenAIClient = require("./OpenAIClient");
 const ContextBuilder = require("./ContextBuilder");
+const AdService = require("./AdService");
 
 class StreamingChatService {
   constructor() {
@@ -9,7 +10,7 @@ class StreamingChatService {
     this.llm = new LLMService();
     this.client = new OpenAIClient();
     this.contextBuilder = new ContextBuilder({ repo: this.repo });
-
+    this.ads = new AdService();
     this.LAST_N = 6; // pick what you want
   }
 
@@ -25,7 +26,7 @@ class StreamingChatService {
 
     const conv = await this.repo.getConversation(convId);
 
-  const contextmessages = await this.contextBuilder.build({
+    const contextmessages = await this.contextBuilder.build({
       conversationId: convId,
       lastN: this.LAST_N,
     });
@@ -33,12 +34,7 @@ class StreamingChatService {
 
     // ✅ IMPORTANT: stream plain text, not JSON
     const system = this.llm.replyOnlySystemPrompt({contextmessages});
-
-    const messages = (conv.messages || []).slice(-12).map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
-
+    const messages = (conv.messages || []).slice(-12).map((m) => ({ role: m.role, content: m.content, }));
     let fullReply = "";
 
     await this.client.chatStream({
@@ -58,6 +54,10 @@ class StreamingChatService {
     });
 
     console.log("[IntentTags]", { conversationId: convId, userId, tags });
+    console.log("[DEBUG tagKeys]", this.ads._normalizeTagKeys(tags));
+    // ✅ Match ads from DB using tags
+    const matchedAds = await this.ads.matchAdsForTags(tags);
+    console.log("[MatchedAds]", { conversationId: convId, userId, matchedAds });
 
     // title if missing
     const updated = await this.repo.getConversation(convId);
@@ -67,7 +67,7 @@ class StreamingChatService {
       if (title) await this.repo.updateTitle(convId, title);
     }
 
-    return { conversationId: convId };
+    return { conversationId: convId, ads: matchedAds };
   }
 
    async getConversation(conversationId) {
