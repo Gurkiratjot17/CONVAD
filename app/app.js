@@ -105,6 +105,230 @@ if (backdrop) backdrop.addEventListener("click", closeSidebar);
       .replaceAll(">", "&gt;");
   }
 
+    function renderMarkdownSafe(text) {
+  // 1) escape HTML first (prevents injection)
+  let s = escapeHtml(text);
+
+  // 2) headings: ###, ##, #
+  
+  s = s.replace(/^###\s+(.*)$/gm, "<strong>$1</strong>");
+  s = s.replace(/^##\s+(.*)$/gm, "<strong>$1</strong>");
+  s = s.replace(/^#\s+(.*)$/gm, "<strong>$1</strong>");
+  // 3) bold **text**
+  s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+
+  // 4) italic *text* (avoid matching bullet "* " at line start)
+  s = s.replace(/(^|[^*])\*(?!\s)(.+?)(?<!\s)\*/g, "$1<em>$2</em>");
+
+  // 5) bullet lines "- " or "* "
+  s = s.replace(/^\s*[-*]\s+(.*)$/gm, "• $1");
+
+  // 6) line breaks
+  s = s.replace(/\n/g, "<br>");
+
+  return s;
+}
+
+
+
+    // ---------- Ad Banner ----------
+  let lastAdMeta = null;   // { snapshotId, decisionId, why }
+  let lastAds = [];        // ads returned for latest assistant reply
+
+  function ensureAdHost() {
+    // Create a container right under the messages list if it doesn't exist
+    let host = document.getElementById("adHost");
+    if (host) return host;
+
+    host = document.createElement("div");
+    host.id = "adHost";
+    host.style.marginTop = "10px";
+    host.style.padding = "0 4px";
+
+    // place after messages container
+    messagesEl.parentNode.insertBefore(host, messagesEl.nextSibling);
+    return host;
+  }
+
+  function clearAdBanner({ animate = true } = {}) {
+  const host = ensureAdHost();
+
+  // nothing to clear
+  if (!host.innerHTML.trim()) {
+    lastAdMeta = null;
+    lastAds = [];
+    return;
+  }
+
+  if (!animate) {
+    host.innerHTML = "";
+    host.classList.remove("fade-out");
+    lastAdMeta = null;
+    lastAds = [];
+    return;
+  }
+
+  // trigger fade
+  host.classList.add("fade-out");
+
+  // after transition, clear DOM
+  window.setTimeout(() => {
+    host.innerHTML = "";
+    host.classList.remove("fade-out");
+    lastAdMeta = null;
+    lastAds = [];
+  }, 220); // slightly > 200ms transition
+}
+
+
+  async function logAdEvent(type, ad) {
+    if (!ad || !currentConversationId) return;
+    const meta = lastAdMeta || {};
+    const body = {
+      conversationId: currentConversationId,
+      snapshotId: meta.snapshotId ?? null,
+      decisionId: meta.decisionId ?? null,
+      meta: { type, why: meta.why ?? null },
+    };
+
+    const url = type === "click"
+      ? `/api/ads/${ad.adId}/click`
+      : `/api/ads/${ad.adId}/hide`;
+
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: jsonHeaders,
+        body: JSON.stringify(body),
+      });
+      if (res.status === 401) return handleUnauthorized();
+    } catch (e) {
+      console.warn("ad event failed:", e);
+    }
+  }
+
+  function renderAdBanner(ads, meta) {
+    clearAdBanner();
+    const host = ensureAdHost();
+
+    lastAds = Array.isArray(ads) ? ads : [];
+    lastAdMeta = meta || null;
+
+    if (!lastAds.length) return;
+
+    // only show the first ad for a clean banner (you can extend later)
+    const ad = lastAds[0];
+
+    const card = document.createElement("div");
+    card.style.display = "flex";
+    card.style.gap = "10px";
+    card.style.alignItems = "center";
+    card.style.border = "1px solid rgba(255,255,255,0.12)";
+    card.style.borderRadius = "12px";
+    card.style.padding = "10px";
+    card.style.background = "rgba(255,255,255,0.04)";
+
+    const img = document.createElement("img");
+    img.src = ad.imageUrl;
+    img.alt = ad.title || "Ad";
+    img.style.width = "120px";
+    img.style.height = "68px";
+    img.style.objectFit = "cover";
+    img.style.borderRadius = "10px";
+    img.loading = "lazy";
+
+    const body = document.createElement("div");
+    body.style.flex = "1";
+
+    const label = document.createElement("div");
+    label.style.fontSize = "12px";
+    label.style.opacity = "0.8";
+    label.textContent = "Sponsored";
+
+    const title = document.createElement("div");
+    title.style.fontWeight = "600";
+    title.style.marginTop = "2px";
+    title.textContent = ad.title || "Ad";
+
+    const desc = document.createElement("div");
+    desc.style.fontSize = "13px";
+    desc.style.opacity = "0.9";
+    desc.style.marginTop = "4px";
+    desc.textContent = ad.description || "";
+
+    const actions = document.createElement("div");
+    actions.style.display = "flex";
+    actions.style.gap = "8px";
+    actions.style.marginTop = "8px";
+
+    const cta = document.createElement("a");
+    cta.href = ad.landingUrl || "#";
+    cta.target = "_blank";
+    cta.rel = "noopener";
+    cta.textContent = "Open";
+    cta.style.display = "inline-block";
+    cta.style.padding = "6px 10px";
+    cta.style.borderRadius = "10px";
+    cta.style.textDecoration = "none";
+    cta.style.border = "1px solid rgba(255,255,255,0.18)";
+    cta.style.color = "inherit";
+
+    cta.addEventListener("click", () => {
+      logAdEvent("click", ad);
+    });
+
+    const hideBtn = document.createElement("button");
+    hideBtn.type = "button";
+    hideBtn.textContent = "Hide";
+    hideBtn.style.padding = "6px 10px";
+    hideBtn.style.borderRadius = "10px";
+    hideBtn.style.border = "1px solid rgba(255,255,255,0.18)";
+    hideBtn.style.background = "transparent";
+    hideBtn.style.color = "inherit";
+    hideBtn.style.cursor = "pointer";
+
+    hideBtn.addEventListener("click", async () => {
+      await logAdEvent("hide", ad);
+      clearAdBanner();
+    });
+
+    // Optional “Why this ad?” (uses meta.why)
+    const whyBtn = document.createElement("button");
+    whyBtn.type = "button";
+    whyBtn.textContent = "Why this?";
+    whyBtn.style.padding = "6px 10px";
+    whyBtn.style.borderRadius = "10px";
+    whyBtn.style.border = "1px solid rgba(255,255,255,0.18)";
+    whyBtn.style.background = "transparent";
+    whyBtn.style.color = "inherit";
+    whyBtn.style.cursor = "pointer";
+
+    whyBtn.addEventListener("click", () => {
+      const why = meta?.why;
+      if (!why) return alert("No explanation available.");
+      const kw = (why.keywords || []).slice(0, 8).join(", ");
+      const ph = (why.phrases || []).slice(0, 4).join(", ");
+      alert(
+        `Shown based on conversation context.\n\nPhrases: ${ph || "(none)"}\nKeywords: ${kw || "(none)"}`
+      );
+    });
+
+    actions.appendChild(cta);
+    actions.appendChild(hideBtn);
+    actions.appendChild(whyBtn);
+
+    body.appendChild(label);
+    body.appendChild(title);
+    body.appendChild(desc);
+    body.appendChild(actions);
+
+    card.appendChild(img);
+    card.appendChild(body);
+
+    host.appendChild(card);
+  }
+
+
   function renderConversation(conv) {
     titleEl.textContent =
       conv.title || (conv.id ? `Conversation #${conv.id}` : "New chat");
@@ -116,13 +340,15 @@ if (backdrop) backdrop.addEventListener("click", closeSidebar);
 
       const bubble = document.createElement("div");
       bubble.className = "bubble";
-      bubble.innerHTML = escapeHtml(m.content);
+      bubble.innerHTML = renderMarkdownSafe(m.content);
 
       row.appendChild(bubble);
       messagesEl.appendChild(row);
     }
 
     messagesEl.scrollTop = messagesEl.scrollHeight;
+    clearAdBanner();
+
   }
 
   async function loadConversationList() {
@@ -193,117 +419,146 @@ if (backdrop) backdrop.addEventListener("click", closeSidebar);
   }
 
   async function sendMessage() {
-    console.log("✅ sendMessage called");
+  console.log("✅ sendMessage called");
 
-    const text = inputEl.value.trim();
-    if (!text) return;
+  const text = inputEl.value.trim();
+  if (!text) return;
 
-    inputEl.value = "";
-    autoGrow();
-    sendBtn.disabled = true;
+  inputEl.value = "";
+  autoGrow();
+  sendBtn.disabled = true;
 
-    // --- User bubble ---
-    const userRow = document.createElement("div");
-    userRow.className = "row user";
-    const userBubble = document.createElement("div");
-    userBubble.className = "bubble";
-    userBubble.textContent = text;
-    userRow.appendChild(userBubble);
-    messagesEl.appendChild(userRow);
+  clearAdBanner();
 
-    // --- Assistant bubble (stream into this) ---
-    const aRow = document.createElement("div");
-    aRow.className = "row assistant";
-    const aBubble = document.createElement("div");
-    aBubble.className = "bubble";
-    aBubble.textContent = "";
-    aRow.appendChild(aBubble);
-    messagesEl.appendChild(aRow);
 
-    messagesEl.scrollTop = messagesEl.scrollHeight;
+  // --- User bubble ---
+  const userRow = document.createElement("div");
+  userRow.className = "row user";
+  const userBubble = document.createElement("div");
+  userBubble.className = "bubble";
+  userBubble.textContent = text;
+  userRow.appendChild(userBubble);
+  messagesEl.appendChild(userRow);
 
-    let assistantText = "";
+  // --- Assistant bubble (stream into this) ---
+  const aRow = document.createElement("div");
+  aRow.className = "row assistant";
+  const aBubble = document.createElement("div");
+  aBubble.className = "bubble";
+  aBubble.textContent = "";
+  aRow.appendChild(aBubble);
+  messagesEl.appendChild(aRow);
 
-    try {
-      const res = await fetch("/api/chat/stream", {
-        method: "POST",
-        headers: jsonHeaders,
-        body: JSON.stringify({ conversationId: currentConversationId, text }),
-      });
+  messagesEl.scrollTop = messagesEl.scrollHeight;
 
-      if (res.status === 401) return handleUnauthorized();
+  let assistantText = "";
+  let streamFinished = false; // ✅ NEW: prevents late tokens overwriting final markdown render
 
-      if (!res.ok || !res.body) {
-        const errText = await res.text().catch(() => "");
-        throw new Error(errText || `stream failed (${res.status})`);
-      }
+  try {
+    const res = await fetch("/api/chat/stream", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify({ conversationId: currentConversationId, text }),
+    });
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let buffer = "";
+    if (res.status === 401) return handleUnauthorized();
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
+    if (!res.ok || !res.body) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(errText || `stream failed (${res.status})`);
+    }
 
-        buffer += decoder.decode(value, { stream: true });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
 
-        // Split into full SSE frames (blank line separators)
-        const frames = buffer.split(/\r?\n\r?\n/);
-        buffer = frames.pop() || "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
 
-        for (const frame of frames) {
-          const trimmed = frame.trim();
-          if (!trimmed) continue;
+      buffer += decoder.decode(value, { stream: true });
 
-          const { eventName, dataText } = parseSSEFrame(trimmed);
+      // Split into full SSE frames (blank line separators)
+      const frames = buffer.split(/\r?\n\r?\n/);
+      buffer = frames.pop() || "";
 
-          if (eventName === "ping") continue;
+      for (const frame of frames) {
+        const trimmed = frame.trim();
+        if (!trimmed) continue;
 
-          if (eventName === "error") {
-            let payload = {};
-            try {
-              payload = JSON.parse(dataText || "{}");
-            } catch {}
-            throw new Error(payload.error || "stream error");
-          }
+        const { eventName, dataText } = parseSSEFrame(trimmed);
 
-          if (eventName === "done") {
-            try {
-              const payload = JSON.parse(dataText || "{}");
-              if (payload?.conversationId) currentConversationId = payload.conversationId;
-            } catch {}
-            continue;
-          }
+        if (eventName === "ping") continue;
 
-          // Normal token frames: data: {"token":"..."}
-          let payload;
+        if (eventName === "error") {
+          let payload = {};
           try {
             payload = JSON.parse(dataText || "{}");
+          } catch {}
+          throw new Error(payload.error || "stream error");
+        }
+
+        if (eventName === "done") {
+          streamFinished = true; // ✅ stop applying tokens after this point
+
+          try {
+            const payload = JSON.parse(dataText || "{}");
+            if (payload?.conversationId) currentConversationId = payload.conversationId;
+
+            // ✅ show ads banner
+            if (Array.isArray(payload?.ads)) {
+              renderAdBanner(payload.ads, payload.meta || null);
+            } else {
+              clearAdBanner();
+            }
           } catch {
-            // fallback: treat as plain text
-            assistantText += dataText;
-            aBubble.textContent = assistantText;
-            messagesEl.scrollTop = messagesEl.scrollHeight;
-            continue;
+            // ignore
           }
 
-          if (payload?.token) {
-            assistantText += payload.token;
-            aBubble.textContent = assistantText;
-            messagesEl.scrollTop = messagesEl.scrollHeight;
-          }
+          // ✅ FINAL markdown render
+          aBubble.innerHTML = renderMarkdownSafe(assistantText);
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+
+          continue;
+        }
+
+        // ✅ ignore any late tokens after done
+        if (streamFinished) continue;
+
+        // Normal token frames: data: {"token":"..."}
+        let payload;
+        try {
+          payload = JSON.parse(dataText || "{}");
+        } catch {
+          // fallback: treat as plain text
+          assistantText += dataText;
+          aBubble.textContent = assistantText;
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+          continue;
+        }
+
+        if (payload?.token) {
+          assistantText += payload.token;
+          aBubble.textContent = assistantText;
+          messagesEl.scrollTop = messagesEl.scrollHeight;
         }
       }
-
-      await loadConversationList();
-    } catch (e) {
-      console.error("Fetch/stream error:", e);
-      aBubble.textContent = `⚠️ ${e?.message || e}`;
-    } finally {
-      sendBtn.disabled = false;
     }
+
+    // ✅ Extra safety: ensure final render even if done arrives oddly / late
+    aBubble.innerHTML = renderMarkdownSafe(assistantText);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+
+    await loadConversationList();
+  } catch (e) {
+    console.error("Fetch/stream error:", e);
+    aBubble.textContent = `⚠️ ${e?.message || e}`;
+  } finally {
+    sendBtn.disabled = false;
   }
+}
+
+
 
   // ---------- Events ----------
   sendBtn.addEventListener("click", (e) => {
@@ -326,6 +581,8 @@ if (backdrop) backdrop.addEventListener("click", closeSidebar);
       messagesEl.innerHTML = "";
       inputEl.focus();
       await loadConversationList();
+      clearAdBanner();
+
     });
   }
 

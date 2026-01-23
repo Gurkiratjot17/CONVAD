@@ -1,9 +1,11 @@
 const express = require("express");
 const StreamingChatService = require("../services/StreamingChatService");
 const { requireAuth } = require("../middleware/auth");
+const AdEventRepository = require("../repositories/AdEventRepository");
 
 const router = express.Router();
 const service = new StreamingChatService();
+const adEvents = new AdEventRepository();
 
 router.get("/conversations", requireAuth, async (req, res) => {
   try {
@@ -49,7 +51,6 @@ router.post("/chat/stream", requireAuth, async (req, res) => {
       res.write(`event: ping\ndata: {}\n\n`);
     }, 15000);
 
-    // if client disconnects, stop work / stop timer
     req.on("close", () => {
       clearInterval(keepAlive);
     });
@@ -65,9 +66,15 @@ router.post("/chat/stream", requireAuth, async (req, res) => {
 
     clearInterval(keepAlive);
 
+    // ✅ IMPORTANT: include ads + meta in SSE so frontend can render banner
     res.write(
-      `event: done\ndata: ${JSON.stringify({ conversationId: result.conversationId })}\n\n`
+      `event: done\ndata: ${JSON.stringify({
+        conversationId: result.conversationId,
+        ads: result.ads || [],
+        meta: result.meta || null,
+      })}\n\n`
     );
+
     res.end();
   } catch (e) {
     console.error(e);
@@ -78,5 +85,61 @@ router.post("/chat/stream", requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * Ad feedback endpoints
+ * Frontend should call these when user interacts with the ad banner.
+ *
+ * Body (optional):
+ * { snapshotId, decisionId, meta }
+ */
+router.post("/ads/:adId/click", requireAuth, async (req, res) => {
+  try {
+    const adId = Number(req.params.adId);
+    if (Number.isNaN(adId)) return res.status(400).json({ ok: false, error: "adId must be numeric" });
+
+    const { conversationId, snapshotId, decisionId, meta } = req.body || {};
+    const convId = Number(conversationId);
+    if (!convId || Number.isNaN(convId)) {
+      return res.status(400).json({ ok: false, error: "conversationId is required" });
+    }
+
+    await adEvents.logEvent({
+      conversationId: convId,
+      snapshotId: snapshotId ? Number(snapshotId) : null,
+      adId,
+      eventType: "click",
+      eventMeta: { decisionId: decisionId ?? null, ...(meta || {}) },
+    });
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.post("/ads/:adId/hide", requireAuth, async (req, res) => {
+  try {
+    const adId = Number(req.params.adId);
+    if (Number.isNaN(adId)) return res.status(400).json({ ok: false, error: "adId must be numeric" });
+
+    const { conversationId, snapshotId, decisionId, meta } = req.body || {};
+    const convId = Number(conversationId);
+    if (!convId || Number.isNaN(convId)) {
+      return res.status(400).json({ ok: false, error: "conversationId is required" });
+    }
+
+    await adEvents.logEvent({
+      conversationId: convId,
+      snapshotId: snapshotId ? Number(snapshotId) : null,
+      adId,
+      eventType: "hide",
+      eventMeta: { decisionId: decisionId ?? null, ...(meta || {}) },
+    });
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
 
 module.exports = router;

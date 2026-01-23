@@ -268,4 +268,17 @@ textarea{
   .bubble{
     max-width: 90%;
   }
+
+  /* Ad banner fade-out */
+#adHost.fade-out {
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+#adHost {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 }
