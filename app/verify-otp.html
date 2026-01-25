@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Verify OTP — CONVAD</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <h2>Verify your email</h2>
+      <p class="auth-meta" id="hint"></p>
+
+      <input id="otp" placeholder="Enter 6-digit code" inputmode="numeric" />
+      <button id="verifyBtn" class="btn primary">Verify</button>
+
+      <p class="auth-meta">
+        Wrong email? <a href="/register.html">Start again</a>
+      </p>
+
+      <div id="msg" class="auth-msg"></div>
+    </div>
+  </div>
+
+  <script>
+    const msg = document.getElementById("msg");
+    const verifyBtn = document.getElementById("verifyBtn");
+    const hint = document.getElementById("hint");
+
+    const pendingId = localStorage.getItem("convad_pending_id");
+    const pendingEmail = localStorage.getItem("convad_pending_email");
+
+    if (!pendingId) {
+      window.location.href = "/register.html";
+    }
+
+    hint.textContent = pendingEmail
+      ? `We sent a code to ${pendingEmail}.`
+      : "We sent a verification code to your email.";
+
+    verifyBtn.addEventListener("click", async () => {
+      msg.textContent = "";
+
+      const otp = document.getElementById("otp").value.trim();
+      if (!otp) {
+        msg.textContent = "Please enter the code.";
+        return;
+      }
+
+      const res = await fetch("/api/auth/register/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pendingId: Number(pendingId), otp }),
+      });
+
+      const data = await res.json();
+      if (!data.ok) {
+        msg.textContent = data.error || "Verification failed";
+        return;
+      }
+
+      // Now we have a session token just like login
+      localStorage.setItem("convad_token", data.token);
+      localStorage.removeItem("convad_pending_id");
+      localStorage.removeItem("convad_pending_email");
+
+      window.location.href = "/";
+    });
+  </script>
+</body>
+</html>
