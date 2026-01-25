@@ -75,19 +75,25 @@ if (backdrop) backdrop.addEventListener("click", closeSidebar);
   }
 
   // ---------- Auth ----------
+const publicPaths = ["/login.html", "/register.html", "/verify-otp.html"];
+const path = window.location.pathname;
+
+if (!publicPaths.includes(path)) {
   const token = localStorage.getItem("convad_token");
   if (!token) {
     window.location.href = "/login.html";
-    return;
+    throw new Error("Not authenticated");
   }
 
-  const authHeaders = { Authorization: `Bearer ${token}` };
-  const jsonHeaders = { ...authHeaders, "Content-Type": "application/json" };
+  var authHeaders = { Authorization: `Bearer ${token}` };
+  var jsonHeaders = { ...authHeaders, "Content-Type": "application/json" };
 
   function handleUnauthorized() {
     localStorage.removeItem("convad_token");
     window.location.href = "/login.html";
   }
+}
+
 
   // ---------- Helpers ----------
   function fmt(dt) {
