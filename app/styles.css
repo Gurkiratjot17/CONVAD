@@ -32,12 +32,15 @@ html[data-theme="light"]{
 html,body{
   height:100%;
   margin:0;
+  
   font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
   background:var(--bg);
   color:var(--text);
 }
 
-/* ✅ Desktop layout */
+/* =========================
+   Layout
+========================= */
 .layout{
   height:100%;
   display:grid;
@@ -46,6 +49,8 @@ html,body{
 
 /* Sidebar */
 .sidebar{
+  height: 100vh;         /* ✅ fill viewport */
+  overflow: hidden;      /* ✅ prevent sidebar itself from scrolling */
   background:var(--panel);
   border-right:1px solid var(--border);
   display:flex;
@@ -55,18 +60,26 @@ html,body{
 }
 
 .sidebar-top{
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--panel); /* ✅ stops “see-through” while scrolling */
   display:flex;
   gap:10px;
   align-items:center;
   padding:14px;
-  border-bottom:1px solid var(--border);
+  padding-bottom: 4px;
+  border-bottom: none;
 }
 
 .brand{font-weight:700;letter-spacing:.6px}
 
 .conversation-list{
   padding:10px;
-  overflow:auto;
+  padding-top: 4px;
+   flex: 1;               /* ✅ take remaining sidebar height */
+  overflow-y: auto;      /* ✅ scroll inside */
+  overflow-x: hidden;
 }
 
 .conv{
@@ -88,8 +101,12 @@ html,body{
 .conv .t{font-size:14px}
 .conv .m{font-size:12px;color:var(--muted);margin-top:6px}
 
-/* Chat */
+/* =========================
+   Chat
+========================= */
 .chat{
+  height: 100vh;
+  overflow: hidden;   /* ✅ prevent chat container from scrolling */
   background:var(--panel2);
   display:grid;
   grid-template-rows: var(--headerH) 1fr auto;
@@ -139,7 +156,9 @@ html,body{
   background:var(--assistant);
 }
 
-/* Composer */
+/* =========================
+   Composer
+========================= */
 .composer{
   position:sticky;
   bottom:0;
@@ -164,7 +183,9 @@ textarea{
   max-height:160px;
 }
 
-/* Buttons */
+/* =========================
+   Buttons
+========================= */
 .btn{
   border:1px solid var(--border);
   border-radius:12px;
@@ -189,19 +210,62 @@ textarea{
 
 .mobile-only{ display:none; }
 
-/* ✅ Auth pages (also inherit theme) */
+/* Auth page logo */
+.auth-logo{
+  display:flex;
+  justify-content:center;
+ 
+}
+
+.auth-logo img{
+  height: 180px;
+  width: auto;
+  
+}
+
+.brand-logo{
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.brand-logo img{
+  height: 80px;
+  width: auto;
+  object-fit: contain;
+}
+
+
+
+/* =========================
+   Auth Pages
+========================= */
 .auth-wrap{
   min-height:100vh;
   display:flex;
+  flex-direction: column;
   align-items:center;
-  justify-content:center;
-  padding:24px;
+  justify-content: flex-start;   /* 👈 stop vertical centering */
+  gap: 14px;
+  padding: 80px 24px 24px;       /* 👈 push content upward */
   background:
     radial-gradient(900px 520px at 20% 10%, color-mix(in srgb, var(--accent) 25%, transparent), transparent 60%),
     radial-gradient(900px 520px at 80% 90%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 60%);
 }
 
+
+
 .auth-card{
+  width:100%;
+  max-width:420px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:18px;
+  box-shadow: var(--shadow);
+}
+
+.term-card{
   width:100%;
   max-width:420px;
   background: color-mix(in srgb, var(--panel) 92%, transparent);
@@ -228,7 +292,162 @@ textarea{
 .auth-meta a{color:var(--accent);text-decoration:none}
 .auth-msg{margin-top:10px;color:#ff6b6b;font-size:13px}
 
-/* ✅ Mobile responsiveness: sidebar becomes a drawer */
+/* =========================
+   Password Show / Hide
+========================= */
+.password-field{
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-field input{
+  width: 100%;
+  padding-right: 3.25rem;
+}
+
+.toggle-password{
+  position: absolute;
+  right: 0.5rem;
+  width: 2.25rem;
+  height: 2rem;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: none;
+  outline: none;
+
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  color: var(--muted);
+
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.95rem;
+
+  transition: background .15s ease, color .15s ease;
+}
+
+/* Hover */
+.toggle-password:hover{
+  background: color-mix(in srgb, var(--panel) 75%, transparent);
+  color: var(--text);
+}
+
+/* Focused input → sync eye button */
+.password-field input:focus + .toggle-password,
+.password-field input:focus-visible + .toggle-password{
+  background: color-mix(in srgb, var(--panel2) 85%, transparent);
+  color: var(--text);
+}
+
+/* Remove focus outline completely */
+.toggle-password:focus,
+.toggle-password:focus-visible,
+.toggle-password:active{
+  outline: none;
+  box-shadow: none;
+}
+
+.terms-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin: 10px 0 12px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.terms{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.terms input{
+  margin: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  pointer-events: auto;
+}
+
+.terms-link{
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.terms-link:hover{
+  text-decoration: underline;
+}
+
+
+/* =========================
+   Transparent Scrollbars
+========================= */
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+
+/* Chromium / Safari */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(255,255,255,0.08);
+  border-radius: 10px;
+  border: 2px solid transparent; /* creates “floating” effect */
+  background-clip: content-box;
+}
+
+/* Hover: slightly more visible */
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255,255,255,0.35);
+}
+
+
+
+/* =========================
+   Password Rules
+========================= */
+.pw-rules{
+  margin-top: 10px;
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.pw-rules .ok{ font-weight:600; }
+.pw-rules .bad{ opacity:0.7; }
+
+/* =========================
+   Ad Banner
+========================= */
+#adHost.fade-out{
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+#adHost{
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* =========================
+   Mobile
+========================= */
 .backdrop{
   display:none;
   position:fixed;
@@ -238,9 +457,7 @@ textarea{
 }
 
 @media (max-width: 900px){
-  .layout{
-    grid-template-columns: 1fr;
-  }
+  .layout{ grid-template-columns: 1fr; }
 
   .sidebar{
     position:fixed;
@@ -253,32 +470,14 @@ textarea{
     z-index: 50;
   }
 
-  .sidebar.open{
-    transform: translateX(0);
-  }
+  .sidebar.open{ transform: translateX(0); }
 
-  .backdrop.show{
-    display:block;
-  }
+  .backdrop.show{ display:block; }
 
-  .mobile-only{
-    display:inline-flex;
-  }
+  .mobile-only{ display:inline-flex; }
 
-  .bubble{
-    max-width: 90%;
-  }
+  .bubble{ max-width: 90%; }
 
-  /* Ad banner fade-out */
-#adHost.fade-out {
-  opacity: 0;
-  transform: translateY(-4px);
-  transition: opacity 200ms ease, transform 200ms ease;
-}
-
-#adHost {
-  opacity: 1;
-  transform: translateY(0);
-}
+ 
 
 }
