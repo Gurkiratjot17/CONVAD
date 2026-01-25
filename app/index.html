@@ -10,7 +10,10 @@
   <div class="layout">
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-top">
-        <div class="brand">CONVAD</div>
+        <a class="brand brand-logo" href="/" aria-label="CONVAD Home">
+          <img src="/assets/CONVAD.PNG" alt="CONVAD" />
+        </a>
+
         <button id="newChatBtn" class="btn secondary" type="button">New</button>
         <button id="logoutBtn" class="btn secondary" type="button">Logout</button>
         <button id="themeBtn" class="btn secondary" type="button" title="Toggle theme">🌙</button>
@@ -18,14 +21,11 @@
       <div id="conversationList" class="conversation-list"></div>
     </aside>
 
-    <!-- ✅ Backdrop for mobile drawer -->
     <div id="backdrop" class="backdrop"></div>
 
     <main class="chat">
       <div class="chat-header">
-        <!-- ✅ Mobile menu toggle -->
         <button id="menuBtn" class="btn secondary mobile-only" type="button" aria-label="Open menu">☰</button>
-
         <div id="chatTitle" class="chat-title">New chat</div>
       </div>
 
@@ -38,7 +38,6 @@
     </main>
   </div>
 
-  <!-- ✅ ensure DOM exists before JS runs -->
   <script src="/app.js" defer></script>
 </body>
 </html>
