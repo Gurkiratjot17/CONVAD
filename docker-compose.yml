@@ -43,6 +43,11 @@ services:
       - DB_NAME=${DB_NAME}
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
+
+      - OTP_PEPPER=${OTP_PEPPER}
+      - OTP_TTL_MINUTES=${OTP_TTL_MINUTES}
+      - OTP_MAX_ATTEMPTS=${OTP_MAX_ATTEMPTS}
+      - OTP_LOCK_MINUTES=${OTP_LOCK_MINUTES}
     depends_on:
       - db
     command: npm run dev
