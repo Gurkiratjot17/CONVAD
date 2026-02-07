@@ -2,10 +2,29 @@ const express = require("express");
 const StreamingChatService = require("../services/StreamingChatService");
 const { requireAuth } = require("../middleware/auth");
 const AdEventRepository = require("../repositories/AdEventRepository");
+const UserRepository = require("../repositories/UserRepository");
+
 
 const router = express.Router();
 const service = new StreamingChatService();
 const adEvents = new AdEventRepository();
+const users = new UserRepository();
+
+
+router.get("/me", requireAuth, async (req, res) => {
+  try {
+    const user = await users.getById(req.userId);
+
+    if (!user) {
+      return res.status(404).json({ ok: false, error: "User not found" });
+    }
+
+    res.json({ ok: true, user });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 
 router.get("/conversations", requireAuth, async (req, res) => {
   try {
