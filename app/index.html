@@ -18,7 +18,24 @@
         <button id="logoutBtn" class="btn secondary" type="button">Logout</button>
         <button id="themeBtn" class="btn secondary" type="button" title="Toggle theme">🌙</button>
       </div>
+
       <div id="conversationList" class="conversation-list"></div>
+
+      <!-- ✅ Bottom user strip (ChatGPT-style) -->
+<div id="sidebarUserStrip" class="sidebar-user" aria-label="Logged in user">
+  <div class="sidebar-user-left">
+    <div id="sidebarUserAvatar" class="sidebar-user-avatar" aria-hidden="true"></div>
+
+    <div class="sidebar-user-info">
+      <div id="sidebarUserName" class="sidebar-user-name">Loading…</div>
+      <div id="sidebarUserEmail" class="sidebar-user-email"></div>
+    </div>
+  </div>
+
+  <button id="sidebarUserMenu" class="sidebar-user-menu" type="button" aria-label="User menu">⋯</button>
+</div>
+
+
     </aside>
 
     <div id="backdrop" class="backdrop"></div>
