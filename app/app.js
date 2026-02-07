@@ -23,48 +23,47 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   const themeBtn = document.getElementById("themeBtn");
-const menuBtn = document.getElementById("menuBtn");
-const sidebar = document.getElementById("sidebar");
-const backdrop = document.getElementById("backdrop");
+  const menuBtn = document.getElementById("menuBtn");
+  const sidebar = document.getElementById("sidebar");
+  const backdrop = document.getElementById("backdrop");
 
-// --- Theme init ---
-(function initTheme() {
-  const saved = localStorage.getItem("convad_theme");
-  const theme = saved === "light" ? "light" : "dark";
-  document.documentElement.setAttribute("data-theme", theme);
-})();
+  // --- Theme init ---
+  (function initTheme() {
+    const saved = localStorage.getItem("convad_theme");
+    const theme = saved === "light" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
 
-function syncThemeIcon() {
-  const theme = document.documentElement.getAttribute("data-theme") || "dark";
-  if (themeBtn) themeBtn.textContent = theme === "dark" ? "🌙" : "☀️";
-}
-syncThemeIcon();
+  function syncThemeIcon() {
+    const theme = document.documentElement.getAttribute("data-theme") || "dark";
+    if (themeBtn) themeBtn.textContent = theme === "dark" ? "🌙" : "☀️";
+  }
+  syncThemeIcon();
 
-if (themeBtn) {
-  themeBtn.addEventListener("click", () => {
-    const current = document.documentElement.getAttribute("data-theme") || "dark";
-    const next = current === "dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-theme", next);
-    localStorage.setItem("convad_theme", next);
-    syncThemeIcon();
-  });
-}
+  if (themeBtn) {
+    themeBtn.addEventListener("click", () => {
+      const current = document.documentElement.getAttribute("data-theme") || "dark";
+      const next = current === "dark" ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", next);
+      localStorage.setItem("convad_theme", next);
+      syncThemeIcon();
+    });
+  }
 
-// --- Mobile sidebar drawer ---
-function openSidebar() {
-  if (!sidebar || !backdrop) return;
-  sidebar.classList.add("open");
-  backdrop.classList.add("show");
-}
-function closeSidebar() {
-  if (!sidebar || !backdrop) return;
-  sidebar.classList.remove("open");
-  backdrop.classList.remove("show");
-}
+  // --- Mobile sidebar drawer ---
+  function openSidebar() {
+    if (!sidebar || !backdrop) return;
+    sidebar.classList.add("open");
+    backdrop.classList.add("show");
+  }
+  function closeSidebar() {
+    if (!sidebar || !backdrop) return;
+    sidebar.classList.remove("open");
+    backdrop.classList.remove("show");
+  }
 
-if (menuBtn) menuBtn.addEventListener("click", openSidebar);
-if (backdrop) backdrop.addEventListener("click", closeSidebar);
-
+  if (menuBtn) menuBtn.addEventListener("click", openSidebar);
+  if (backdrop) backdrop.addEventListener("click", closeSidebar);
 
   // If critical elements are missing, stop early with a clear error
   if (!messagesEl || !titleEl || !inputEl || !sendBtn) {
@@ -75,25 +74,110 @@ if (backdrop) backdrop.addEventListener("click", closeSidebar);
   }
 
   // ---------- Auth ----------
-const publicPaths = ["/login.html", "/register.html", "/verify-otp.html"];
-const path = window.location.pathname;
+  const publicPaths = ["/login.html", "/register.html", "/verify-otp.html"];
+  const path = window.location.pathname;
 
-if (!publicPaths.includes(path)) {
-  const token = localStorage.getItem("convad_token");
-  if (!token) {
-    window.location.href = "/login.html";
-    throw new Error("Not authenticated");
-  }
-
-  var authHeaders = { Authorization: `Bearer ${token}` };
-  var jsonHeaders = { ...authHeaders, "Content-Type": "application/json" };
+  // Make these available everywhere in this file
+  var authHeaders = null;
+  var jsonHeaders = null;
 
   function handleUnauthorized() {
     localStorage.removeItem("convad_token");
     window.location.href = "/login.html";
   }
-}
 
+  // ✅ function-scoped (NOT block-scoped) so init call works
+var ensureUserBadge = function () {
+  if (!sidebar) return null;
+
+  // Prefer your existing HTML strip (ChatGPT-style)
+  const strip = document.getElementById("sidebarUserStrip");
+  if (strip) return strip;
+
+  // Fallback: if strip is missing, do NOT create a second one.
+  // (This prevents duplicates.)
+  console.warn("⚠️ sidebarUserStrip not found in HTML. Add it to sidebar.");
+  return null;
+};
+
+var setAvatar = function ({ profileImageUrl, firstName, lastName }) {
+  // Use HTML id
+  const avatar = document.getElementById("sidebarUserAvatar");
+  if (!avatar) return;
+
+  avatar.innerHTML = "";
+
+  const initials =
+    `${(firstName || "").trim()[0] || ""}${(lastName || "").trim()[0] || ""}`
+      .toUpperCase()
+      .trim() || "U";
+
+  if (profileImageUrl) {
+    const img = document.createElement("img");
+    img.src = profileImageUrl;
+    img.alt = "User avatar";
+    img.loading = "lazy";
+    img.style.width = "100%";
+    img.style.height = "100%";
+    img.style.objectFit = "cover";
+    img.onerror = () => {
+      avatar.innerHTML = "";
+      avatar.textContent = initials;
+    };
+    avatar.appendChild(img);
+  } else {
+    avatar.textContent = initials;
+  }
+};
+
+var loadCurrentUser = async function () {
+  if (!authHeaders) return;
+
+  // Ensure strip exists (but don't create duplicates)
+  const strip = ensureUserBadge();
+  if (!strip) return;
+
+  try {
+    const res = await fetch("/api/me", { headers: authHeaders });
+    if (res.status === 401) return handleUnauthorized();
+
+    const data = await res.json().catch(() => null);
+    if (!data?.ok || !data.user) {
+      console.warn("⚠️ /api/me returned:", data);
+      return;
+    }
+
+    const u = data.user;
+
+    // Use HTML ids
+    const nameEl = document.getElementById("sidebarUserName");
+    const emailEl = document.getElementById("sidebarUserEmail");
+
+    const fullName = `${u.firstName || ""} ${u.lastName || ""}`.trim() || "User";
+    if (nameEl) nameEl.textContent = fullName;
+    if (emailEl) emailEl.textContent = u.email || "";
+
+    setAvatar({
+      profileImageUrl: u.profileImageUrl || null,
+      firstName: u.firstName,
+      lastName: u.lastName,
+    });
+  } catch (e) {
+    console.warn("Failed to load current user:", e);
+  }
+};
+
+
+  if (!publicPaths.includes(path)) {
+    const token = localStorage.getItem("convad_token");
+    if (!token) {
+      window.location.href = "/login.html";
+      throw new Error("Not authenticated");
+    }
+
+    authHeaders = { Authorization: `Bearer ${token}` };
+    jsonHeaders = { ...authHeaders, "Content-Type": "application/json" };
+  }
 
   // ---------- Helpers ----------
   function fmt(dt) {
@@ -111,33 +195,31 @@ if (!publicPaths.includes(path)) {
       .replaceAll(">", "&gt;");
   }
 
-    function renderMarkdownSafe(text) {
-  // 1) escape HTML first (prevents injection)
-  let s = escapeHtml(text);
+  function renderMarkdownSafe(text) {
+    // 1) escape HTML first (prevents injection)
+    let s = escapeHtml(text);
 
-  // 2) headings: ###, ##, #
-  
-  s = s.replace(/^###\s+(.*)$/gm, "<strong>$1</strong>");
-  s = s.replace(/^##\s+(.*)$/gm, "<strong>$1</strong>");
-  s = s.replace(/^#\s+(.*)$/gm, "<strong>$1</strong>");
-  // 3) bold **text**
-  s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    // 2) headings: ###, ##, #
+    s = s.replace(/^###\s+(.*)$/gm, "<strong>$1</strong>");
+    s = s.replace(/^##\s+(.*)$/gm, "<strong>$1</strong>");
+    s = s.replace(/^#\s+(.*)$/gm, "<strong>$1</strong>");
 
-  // 4) italic *text* (avoid matching bullet "* " at line start)
-  s = s.replace(/(^|[^*])\*(?!\s)(.+?)(?<!\s)\*/g, "$1<em>$2</em>");
+    // 3) bold **text**
+    s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 
-  // 5) bullet lines "- " or "* "
-  s = s.replace(/^\s*[-*]\s+(.*)$/gm, "• $1");
+    // 4) italic *text* (avoid matching bullet "* " at line start)
+    s = s.replace(/(^|[^*])\*(?!\s)(.+?)(?<!\s)\*/g, "$1<em>$2</em>");
 
-  // 6) line breaks
-  s = s.replace(/\n/g, "<br>");
+    // 5) bullet lines "- " or "* "
+    s = s.replace(/^\s*[-*]\s+(.*)$/gm, "• $1");
 
-  return s;
-}
+    // 6) line breaks
+    s = s.replace(/\n/g, "<br>");
 
+    return s;
+  }
 
-
-    // ---------- Ad Banner ----------
+  // ---------- Ad Banner ----------
   let lastAdMeta = null;   // { snapshotId, decisionId, why }
   let lastAds = [];        // ads returned for latest assistant reply
 
@@ -157,35 +239,34 @@ if (!publicPaths.includes(path)) {
   }
 
   function clearAdBanner({ animate = true } = {}) {
-  const host = ensureAdHost();
+    const host = ensureAdHost();
 
-  // nothing to clear
-  if (!host.innerHTML.trim()) {
-    lastAdMeta = null;
-    lastAds = [];
-    return;
+    // nothing to clear
+    if (!host.innerHTML.trim()) {
+      lastAdMeta = null;
+      lastAds = [];
+      return;
+    }
+
+    if (!animate) {
+      host.innerHTML = "";
+      host.classList.remove("fade-out");
+      lastAdMeta = null;
+      lastAds = [];
+      return;
+    }
+
+    // trigger fade
+    host.classList.add("fade-out");
+
+    // after transition, clear DOM
+    window.setTimeout(() => {
+      host.innerHTML = "";
+      host.classList.remove("fade-out");
+      lastAdMeta = null;
+      lastAds = [];
+    }, 220); // slightly > 200ms transition
   }
-
-  if (!animate) {
-    host.innerHTML = "";
-    host.classList.remove("fade-out");
-    lastAdMeta = null;
-    lastAds = [];
-    return;
-  }
-
-  // trigger fade
-  host.classList.add("fade-out");
-
-  // after transition, clear DOM
-  window.setTimeout(() => {
-    host.innerHTML = "";
-    host.classList.remove("fade-out");
-    lastAdMeta = null;
-    lastAds = [];
-  }, 220); // slightly > 200ms transition
-}
-
 
   async function logAdEvent(type, ad) {
     if (!ad || !currentConversationId) return;
@@ -314,9 +395,7 @@ if (!publicPaths.includes(path)) {
       if (!why) return alert("No explanation available.");
       const kw = (why.keywords || []).slice(0, 8).join(", ");
       const ph = (why.phrases || []).slice(0, 4).join(", ");
-      alert(
-        `Shown based on conversation context.\n\nPhrases: ${ph || "(none)"}\nKeywords: ${kw || "(none)"}`
-      );
+      alert(`Shown based on conversation context.\n\nPhrases: ${ph || "(none)"}\nKeywords: ${kw || "(none)"}`);
     });
 
     actions.appendChild(cta);
@@ -333,7 +412,6 @@ if (!publicPaths.includes(path)) {
 
     host.appendChild(card);
   }
-
 
   function renderConversation(conv) {
     titleEl.textContent =
@@ -354,11 +432,11 @@ if (!publicPaths.includes(path)) {
 
     messagesEl.scrollTop = messagesEl.scrollHeight;
     clearAdBanner();
-
   }
 
   async function loadConversationList() {
     if (!listEl) return;
+    if (!authHeaders) return; // ✅ prevent calling on public pages
 
     const res = await fetch("/api/conversations", { headers: authHeaders });
     if (res.status === 401) return handleUnauthorized();
@@ -425,146 +503,131 @@ if (!publicPaths.includes(path)) {
   }
 
   async function sendMessage() {
-  console.log("✅ sendMessage called");
+    console.log("✅ sendMessage called");
 
-  const text = inputEl.value.trim();
-  if (!text) return;
+    const text = inputEl.value.trim();
+    if (!text) return;
 
-  inputEl.value = "";
-  autoGrow();
-  sendBtn.disabled = true;
+    inputEl.value = "";
+    autoGrow();
+    sendBtn.disabled = true;
 
-  clearAdBanner();
+    clearAdBanner();
 
+    // --- User bubble ---
+    const userRow = document.createElement("div");
+    userRow.className = "row user";
+    const userBubble = document.createElement("div");
+    userBubble.className = "bubble";
+    userBubble.textContent = text;
+    userRow.appendChild(userBubble);
+    messagesEl.appendChild(userRow);
 
-  // --- User bubble ---
-  const userRow = document.createElement("div");
-  userRow.className = "row user";
-  const userBubble = document.createElement("div");
-  userBubble.className = "bubble";
-  userBubble.textContent = text;
-  userRow.appendChild(userBubble);
-  messagesEl.appendChild(userRow);
+    // --- Assistant bubble (stream into this) ---
+    const aRow = document.createElement("div");
+    aRow.className = "row assistant";
+    const aBubble = document.createElement("div");
+    aBubble.className = "bubble";
+    aBubble.textContent = "";
+    aRow.appendChild(aBubble);
+    messagesEl.appendChild(aRow);
 
-  // --- Assistant bubble (stream into this) ---
-  const aRow = document.createElement("div");
-  aRow.className = "row assistant";
-  const aBubble = document.createElement("div");
-  aBubble.className = "bubble";
-  aBubble.textContent = "";
-  aRow.appendChild(aBubble);
-  messagesEl.appendChild(aRow);
-
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-
-  let assistantText = "";
-  let streamFinished = false; // ✅ NEW: prevents late tokens overwriting final markdown render
-
-  try {
-    const res = await fetch("/api/chat/stream", {
-      method: "POST",
-      headers: jsonHeaders,
-      body: JSON.stringify({ conversationId: currentConversationId, text }),
-    });
-
-    if (res.status === 401) return handleUnauthorized();
-
-    if (!res.ok || !res.body) {
-      const errText = await res.text().catch(() => "");
-      throw new Error(errText || `stream failed (${res.status})`);
-    }
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder("utf-8");
-    let buffer = "";
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-
-      // Split into full SSE frames (blank line separators)
-      const frames = buffer.split(/\r?\n\r?\n/);
-      buffer = frames.pop() || "";
-
-      for (const frame of frames) {
-        const trimmed = frame.trim();
-        if (!trimmed) continue;
-
-        const { eventName, dataText } = parseSSEFrame(trimmed);
-
-        if (eventName === "ping") continue;
-
-        if (eventName === "error") {
-          let payload = {};
-          try {
-            payload = JSON.parse(dataText || "{}");
-          } catch {}
-          throw new Error(payload.error || "stream error");
-        }
-
-        if (eventName === "done") {
-          streamFinished = true; // ✅ stop applying tokens after this point
-
-          try {
-            const payload = JSON.parse(dataText || "{}");
-            if (payload?.conversationId) currentConversationId = payload.conversationId;
-
-            // ✅ show ads banner
-            if (Array.isArray(payload?.ads)) {
-              renderAdBanner(payload.ads, payload.meta || null);
-            } else {
-              clearAdBanner();
-            }
-          } catch {
-            // ignore
-          }
-
-          // ✅ FINAL markdown render
-          aBubble.innerHTML = renderMarkdownSafe(assistantText);
-          messagesEl.scrollTop = messagesEl.scrollHeight;
-
-          continue;
-        }
-
-        // ✅ ignore any late tokens after done
-        if (streamFinished) continue;
-
-        // Normal token frames: data: {"token":"..."}
-        let payload;
-        try {
-          payload = JSON.parse(dataText || "{}");
-        } catch {
-          // fallback: treat as plain text
-          assistantText += dataText;
-          aBubble.textContent = assistantText;
-          messagesEl.scrollTop = messagesEl.scrollHeight;
-          continue;
-        }
-
-        if (payload?.token) {
-          assistantText += payload.token;
-          aBubble.textContent = assistantText;
-          messagesEl.scrollTop = messagesEl.scrollHeight;
-        }
-      }
-    }
-
-    // ✅ Extra safety: ensure final render even if done arrives oddly / late
-    aBubble.innerHTML = renderMarkdownSafe(assistantText);
     messagesEl.scrollTop = messagesEl.scrollHeight;
 
-    await loadConversationList();
-  } catch (e) {
-    console.error("Fetch/stream error:", e);
-    aBubble.textContent = `⚠️ ${e?.message || e}`;
-  } finally {
-    sendBtn.disabled = false;
+    let assistantText = "";
+    let streamFinished = false;
+
+    try {
+      const res = await fetch("/api/chat/stream", {
+        method: "POST",
+        headers: jsonHeaders,
+        body: JSON.stringify({ conversationId: currentConversationId, text }),
+      });
+
+      if (res.status === 401) return handleUnauthorized();
+
+      if (!res.ok || !res.body) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(errText || `stream failed (${res.status})`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        const frames = buffer.split(/\r?\n\r?\n/);
+        buffer = frames.pop() || "";
+
+        for (const frame of frames) {
+          const trimmed = frame.trim();
+          if (!trimmed) continue;
+
+          const { eventName, dataText } = parseSSEFrame(trimmed);
+
+          if (eventName === "ping") continue;
+
+          if (eventName === "error") {
+            let payload = {};
+            try { payload = JSON.parse(dataText || "{}"); } catch {}
+            throw new Error(payload.error || "stream error");
+          }
+
+          if (eventName === "done") {
+            streamFinished = true;
+
+            try {
+              const payload = JSON.parse(dataText || "{}");
+              if (payload?.conversationId) currentConversationId = payload.conversationId;
+
+              if (Array.isArray(payload?.ads)) {
+                renderAdBanner(payload.ads, payload.meta || null);
+              } else {
+                clearAdBanner();
+              }
+            } catch {}
+
+            aBubble.innerHTML = renderMarkdownSafe(assistantText);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+            continue;
+          }
+
+          if (streamFinished) continue;
+
+          let payload;
+          try {
+            payload = JSON.parse(dataText || "{}");
+          } catch {
+            assistantText += dataText;
+            aBubble.textContent = assistantText;
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+            continue;
+          }
+
+          if (payload?.token) {
+            assistantText += payload.token;
+            aBubble.textContent = assistantText;
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+          }
+        }
+      }
+
+      aBubble.innerHTML = renderMarkdownSafe(assistantText);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      await loadConversationList();
+    } catch (e) {
+      console.error("Fetch/stream error:", e);
+      aBubble.textContent = `⚠️ ${e?.message || e}`;
+    } finally {
+      sendBtn.disabled = false;
+    }
   }
-}
-
-
 
   // ---------- Events ----------
   sendBtn.addEventListener("click", (e) => {
@@ -588,11 +651,9 @@ if (!publicPaths.includes(path)) {
       inputEl.focus();
       await loadConversationList();
       clearAdBanner();
-
     });
   }
 
-  // Proper logout: delete session server-side + clear token client-side
   if (logoutBtn) {
     logoutBtn.addEventListener("click", async (e) => {
       e.preventDefault();
@@ -612,4 +673,5 @@ if (!publicPaths.includes(path)) {
 
   // ---------- Init ----------
   loadConversationList();
+  loadCurrentUser(); // ✅ now guaranteed defined + authHeaders set
 });
