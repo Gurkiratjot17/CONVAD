@@ -22,6 +22,17 @@ router.post("/register", async (req, res) => {
   }
 });
 
+// POST /api/auth/register/resend
+router.post("/register/resend", async (req, res) => {
+  try {
+    const { pendingId } = req.body || {};
+    const out = await regOtp.resend({ pendingId });
+    res.json({ ok: true, ...out });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
 
 // POST /api/auth/register/verify (finish OTP -> creates user + session)
 router.post("/register/verify", async (req, res) => {
@@ -33,6 +44,7 @@ router.post("/register/verify", async (req, res) => {
     res.status(400).json({ ok: false, error: e.message });
   }
 });
+
 
 // -------------------- Login / Logout --------------------
 
