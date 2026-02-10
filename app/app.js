@@ -391,12 +391,28 @@ var loadCurrentUser = async function () {
     whyBtn.style.cursor = "pointer";
 
     whyBtn.addEventListener("click", () => {
-      const why = meta?.why;
-      if (!why) return alert("No explanation available.");
-      const kw = (why.keywords || []).slice(0, 8).join(", ");
-      const ph = (why.phrases || []).slice(0, 4).join(", ");
-      alert(`Shown based on conversation context.\n\nPhrases: ${ph || "(none)"}\nKeywords: ${kw || "(none)"}`);
-    });
+  const why = meta?.why;
+  if (!why) return alert("No explanation available.");
+
+  const qt = (why.queryTerms || []).slice(0, 12).join(", ");
+  const qText = (why.queryText || "").slice(0, 220);
+  const gate = why.gate || {};
+  const gateReasons = (gate.reasonCodes || []).join(", ") || "(none)";
+  const constraints = gate.constraints ? JSON.stringify(gate.constraints) : "{}";
+
+  // Also show the pipeline label from the ad itself
+  const mode = ad.reason || "(unknown)";
+
+  alert(
+    `Why this ad?\n\n` +
+    `Mode: ${mode}\n` +
+    `Gate reasons: ${gateReasons}\n` +
+    `Constraints: ${constraints}\n\n` +
+    `Query terms (BM25): ${qt || "(none)"}\n` +
+    `Query text: ${qText || "(none)"}`
+  );
+});
+
 
     actions.appendChild(cta);
     actions.appendChild(hideBtn);
