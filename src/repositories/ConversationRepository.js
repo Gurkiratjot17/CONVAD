@@ -112,22 +112,6 @@ class ConversationRepository {
 }
 
 
-
-async listTags() {
-  const pool = getPool();
-
-  const [rows] = await pool.execute(
-    `SELECT tag_key
-     FROM tags
-     ORDER BY tag_key ASC`
-  );
-
-  const tags = rows.map(r => r.tag_key);
-  return tags;
-
-}
-
-
 }
 
 module.exports = ConversationRepository;
