@@ -27,7 +27,6 @@ function buildTitleFromFirstUserMessage(text) {
   s = s.replace(/[?.!]+$/g, "").trim();
 
   // simple intent-based phrasing
-  // (keep this small; it’s for nicer titles, not perfect NLP)
   const patterns = [
     { re: /\bdocker\b/i, title: "Docker help" },
     { re: /\bmysql\b|\bsql\b/i, title: "MySQL / SQL help" },
@@ -47,7 +46,6 @@ function buildTitleFromFirstUserMessage(text) {
   const maxLen = 60;
   if (s.length > maxLen) s = s.slice(0, maxLen).trim();
 
-  // make it look like a title (very light title-casing)
   const words = s.split(" ").slice(0, 8);
   const small = new Set(["a","an","the","and","or","but","to","of","in","on","for","with","at","by"]);
   const titled = words
@@ -73,7 +71,7 @@ class StreamingChatService {
     // Ad service now supports contextual matching via AdSelectionService
     this.ads = new AdService();
 
-    this.LAST_N = 3;   // used by ContextBuilder
+    this.LAST_N = 3;  // used by ContextBuilder
     this.LAST_M = 3;  // used for LLM messages sent to model + ad matching context
   }
 
@@ -90,7 +88,7 @@ class StreamingChatService {
     await this.repo.addMessage({ conversationId: convId, role: "user", content: text });
 
     // 3) Build prompt context (for the LLM only)
-    const contextmessages = await this.contextBuilder.build({
+    const contextMessages = await this.contextBuilder.build({
       conversationId: convId,
       lastN: this.LAST_N,
     });
@@ -101,7 +99,7 @@ class StreamingChatService {
       .slice(-this.LAST_M)
       .map((m) => ({ role: m.role, content: m.content }));
 
-    const system = this.llm.replyOnlySystemPrompt({ contextmessages });
+    const system = this.llm.replyOnlySystemPrompt({ contextmessages: contextMessages });
 
     // 5) Stream assistant reply
     let fullReply = "";
@@ -144,27 +142,18 @@ class StreamingChatService {
       why,
     });
 
-    // 9) Title if missing
-    // ✅ Title: set once from first meaningful user message (nicer than raw slice)
-const updated = await this.repo.getConversation(convId);
-
-if (!updated.title) {
-  const firstMeaningfulUser =
-    (updated.messages || []).find(m => m.role === "user" && buildTitleFromFirstUserMessage(m.content))
-      ?.content || "";
-
-  const title = buildTitleFromFirstUserMessage(firstMeaningfulUser);
-  if (title) await this.repo.updateTitle(convId, title);
-}
+    // 9) Title if missing (run once)
+    const updated = await this.repo.getConversation(convId);
 
     if (!updated.title) {
-  const firstMeaningfulUser =
-    (updated.messages || []).find(m => m.role === "user" && buildTitleFromFirstUserMessage(m.content))
-      ?.content || "";
+      const firstMeaningfulUser =
+        (updated.messages || []).find(
+          (m) => m.role === "user" && buildTitleFromFirstUserMessage(m.content)
+        )?.content || "";
 
-  const title = buildTitleFromFirstUserMessage(firstMeaningfulUser);
-  if (title) await this.repo.updateTitle(convId, title);
-}
+      const title = buildTitleFromFirstUserMessage(firstMeaningfulUser);
+      if (title) await this.repo.updateTitle(convId, title);
+    }
 
     // 10) Response payload (frontend can ignore meta for now)
     return {
@@ -183,7 +172,6 @@ if (!updated.title) {
   async listConversations(userId) {
     return this.repo.listConversations(userId);
   }
-
 }
 
 module.exports = StreamingChatService;
