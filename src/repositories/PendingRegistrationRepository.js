@@ -47,7 +47,7 @@ class PendingRegistrationRepository {
       return;
     }
     await this.pool.execute(
-      `UPDATE pending_registrations
+      `UPDATE pending_registrations 
        SET attempts = attempts + 1
        WHERE pending_id = ?`,
       [pendingId]
