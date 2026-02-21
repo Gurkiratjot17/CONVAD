@@ -1,0 +1,226 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="/admin/admin.css" />
+  <title>Admin • Trends</title>
+</head>
+<body>
+  <header class="topbar">
+    <div class="navleft">
+      <div class="brand">CONVAD • Admin</div>
+      <a class="btn secondary" href="/admin/index.html">Home</a>
+      <a class="btn secondary" href="/admin/ads.html">Ads</a>
+      <a class="btn secondary" href="/admin/trends.html">Trends</a>
+    </div>
+    <div class="navright">
+      <button id="logoutBtn" class="btn secondary" type="button">Logout</button>
+      <button id="themeToggle" class="btn">☀️ Light</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <h1>Trends</h1>
+    <p class="muted">System-wide activity over time + top trending ads.</p>
+
+    <div class="row">
+      <select id="days" class="input" style="min-width:160px;">
+        <option value="7">Last 7 days</option>
+        <option value="14" selected>Last 14 days</option>
+        <option value="30">Last 30 days</option>
+      </select>
+
+      <select id="hours" class="input" style="min-width:160px;">
+        <option value="24" selected>Trending window 24h</option>
+        <option value="48">Trending window 48h</option>
+        <option value="72">Trending window 72h</option>
+      </select>
+    </div>
+
+    <!-- System activity -->
+    <div class="grid">
+      <div class="card cardPad" style="grid-column: span 12;">
+        <h2>System activity (daily)</h2>
+
+        <div id="summaryPills" class="pills" style="margin-top:10px;"></div>
+        <div id="dataNote" class="notice" style="display:none; margin-top:10px;"></div>
+
+        <div class="canvasWrap" style="margin-top:12px;">
+          <canvas id="activityChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Trending banners only -->
+    <div class="trendSection" style="margin-top:20px;">
+      <h2 style="margin:0 0 10px;">Top trending ads</h2>
+      <div id="grid" class="grid"></div>
+    </div>
+  </main>
+
+  <script type="module">
+    import {
+      apiGet,
+      escapeHtml,
+      initThemeToggle,
+      logout,
+      drawLineChart,
+      drawBarChart,
+      formatDayLabel,
+      shouldUseBars,
+      fillMissingDays
+    } from "./admin.js";
+
+    initThemeToggle();
+
+    // ✅ Logout
+    document.getElementById("logoutBtn").addEventListener("click", logout);
+
+    async function load() {
+      const days = Number(document.getElementById("days").value);
+      const hours = document.getElementById("hours").value;
+
+      // ------------------------
+      // System activity (daily)
+      // ------------------------
+      const ts = await apiGet(`/api/admin/trends/timeseries?days=${days}`);
+      const raw = ts.rows || [];
+      const rows = fillMissingDays(raw, days);
+
+      const labels = rows.map(r => formatDayLabel(r.day));
+
+      // FIX: use the correct field for rendered impressions from the timeseries endpoint
+      const renderedImpr = rows.map(r => Number(r.impressions_rendered || 0));
+      const selectedImpr = rows.map(r => Number(r.impressions || 0));
+
+      const clicks = rows.map(r => Number(r.clicks || 0));
+      const hides = rows.map(r => Number(r.dismisses || 0));
+      const totalSelected = selectedImpr.reduce((a,b)=>a+b,0);
+      const totalRendered = renderedImpr.reduce((a,b)=>a+b,0);
+      const totalClicks = clicks.reduce((a,b)=>a+b,0);
+      const totalHides = hides.reduce((a,b)=>a+b,0);
+      const ctr = totalRendered ? ((totalClicks / totalRendered) * 100).toFixed(2) : "0.00";
+
+      document.getElementById("summaryPills").innerHTML = `
+        <span class="pill">Days: ${labels.length}</span>
+        <span class="pill">Selected Impressions: ${totalSelected}</span>
+        <span class="pill">Rendered Impressions: ${totalRendered}</span>
+        <span class="pill">Clicks: ${totalClicks}</span>
+        <span class="pill">Hides: ${totalHides}</span>
+        <span class="pill">CTR: ${ctr}%</span>
+      `;
+
+      const note = document.getElementById("dataNote");
+      const nonZero = [...renderedImpr, ...clicks, ...hides].filter(v=>v>0).length;
+
+      if (labels.length < 4 || nonZero < 4) {
+        note.style.display = "block";
+        note.textContent =
+          "Trend chart is based on limited/sparse data. As more events accumulate, patterns will stabilize.";
+      } else {
+        note.style.display = "none";
+      }
+
+      const canvas = document.getElementById("activityChart");
+      const useBars = shouldUseBars(labels, [renderedImpr, clicks, hides]);
+
+      if (useBars) {
+        drawBarChart(canvas, renderedImpr, labels, { title: "Daily rendered impressions" });
+      } else {
+        drawLineChart(canvas, [renderedImpr, clicks, hides], labels, {
+          title: "Daily totals (rendered)",
+          names: ["Rendered Impressions", "Clicks", "Hides"]
+        });
+      }
+
+      // ------------------------
+      // Trending ads (BANNERS)
+      // ------------------------
+      const data = await apiGet(`/api/admin/trends?hours=${hours}&minImpressions=1`);
+      const trends = (data.trends || []).filter(t => t.ad);
+
+      const grid = document.getElementById("grid");
+      grid.innerHTML = "";
+
+      if (!trends.length) {
+        grid.innerHTML = `<div class="muted">No trending ads in this window yet.</div>`;
+        return;
+      }
+
+      trends.forEach(t => {
+        const ad = t.ad;
+
+        const selNow = Number(t.impsel_now ?? 0);
+        const selPrev = Number(t.impsel_prev ?? 0);
+
+        // FIX: don't use `|| 0` because it masks missing vs 0 and can cause "blank-looking" issues elsewhere
+        const renNow = Number(t.imp_now ?? 0);
+        const renPrev = Number(t.imp_prev ?? 0);
+
+        const clicksNow = Number(t.clicks_now ?? 0);
+
+        // Dashboard metric: percentage growth (interpretable)
+        let growthPct;
+        if (selPrev === 0) {
+          growthPct = selNow > 0 ? 100 : 0;
+        } else {
+          growthPct = ((selNow - selPrev) / selPrev) * 100;
+        }
+
+        // Ranking signal: log-smoothed ratio, weighted by volume
+        const logGrowth = Math.log((selNow + 1) / (selPrev + 1));
+        const volumeWeight = Math.log(renNow + 1);
+        const rankingGrowthScore = logGrowth * volumeWeight;
+
+        const banner = document.createElement("div");
+        banner.className = "trendBanner clickable";
+        banner.style.gridColumn = "span 12";
+
+        banner.innerHTML = `
+          <img class="trendBannerImg" src="${escapeHtml(ad.image_url)}" alt="">
+          <div class="trendBannerBody">
+            <div class="trendBannerTop">
+              <div class="trendBannerTitle">${escapeHtml(ad.title)}</div>
+            </div>
+
+            <div class="trendBannerDesc muted">${escapeHtml((ad.description || "").slice(0, 120))}</div>
+
+            <div class="pills" style="margin-top:8px;">
+              <span class="pill">Selected now: ${selNow}</span>
+              <span class="pill">Selected prev: ${selPrev}</span>
+              <span class="pill">Growth: ${growthPct.toFixed(2)}%</span>
+              <span class="pill">Ranking score: ${rankingGrowthScore.toFixed(2)}</span>
+            </div>
+
+            <div class="pills" style="margin-top:8px;">
+              <span class="pill">Rendered now: ${renNow}</span>
+              <span class="pill">Rendered prev: ${renPrev}</span>
+              <span class="pill">Clicks: ${clicksNow}</span>
+            </div>
+          </div>
+
+          <div class="trendBannerActions">
+            <div class="trendBannerId">#${ad.ad_id}</div>
+            <a class="btn js-analytics" href="/admin/ad-analytics.html?id=${ad.ad_id}">Open Analytics</a>
+          </div>
+        `;
+
+        // If you later add banner click handlers, this prevents double-trigger
+        const a = banner.querySelector(".js-analytics");
+        if (a) a.addEventListener("click", (e) => e.stopPropagation());
+
+        grid.appendChild(banner);
+      });
+    }
+
+    document.getElementById("days").addEventListener("change", load);
+    document.getElementById("hours").addEventListener("change", load);
+
+    window.addEventListener("resize", load);
+    document.getElementById("themeToggle").addEventListener("click", () => setTimeout(load, 50));
+
+    load();
+  </script>
+</body>
+</html>
