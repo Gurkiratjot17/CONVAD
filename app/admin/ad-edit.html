@@ -1,0 +1,240 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="/admin/admin.css" />
+  <title>Admin • Edit Ad</title>
+
+  <!-- ✅ Layout-only override (keeps everything else intact) -->
+  <style>
+    .editLayout{
+      display:grid;
+      grid-template-columns: 2fr 1fr; /* form wider, preview narrower */
+      gap: 14px;
+      align-items: start;
+    }
+    /* responsive: stack on smaller screens */
+    @media (max-width: 980px){
+      .editLayout{ grid-template-columns: 1fr; }
+      .previewSticky{ position: static !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="navleft">
+      <div class="brand">CONVAD • Admin</div>
+      <a class="btn secondary" href="/admin/index.html">Home</a>
+      <a class="btn secondary" href="/admin/ads.html">Ads</a>
+      <a class="btn secondary" href="/admin/trends.html">Trends</a>
+    </div>
+    <div class="navright">
+      <button id="logoutBtn" class="btn secondary" type="button">Logout</button>
+      <button id="themeToggle" class="btn">☀️ Light</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="editHeader">
+      <div>
+        <h1 id="title">Edit Ad</h1>
+        <div class="muted small">Edit creatives (preview matches Ads Library cards)</div>
+      </div>
+      <div class="statusBadge">
+        <span id="statusDot" class="dot"></span>
+        <span id="statusText">ACTIVE</span>
+      </div>
+    </div>
+
+    <div id="msg" class="notice" style="display:none;"></div>
+
+    <div class="editLayout">
+      <!-- LEFT: FORM -->
+      <div class="card cardPad">
+        <div class="sectionTitle">Creative Details</div>
+        <hr class="sep"/>
+
+        <label>Title</label>
+        <input id="ad_title" class="input watch" />
+
+        <label>Description</label>
+        <textarea id="ad_desc" class="input watch" rows="6" style="min-height:140px;"></textarea>
+
+        <label>Image URL</label>
+        <input id="ad_img" class="input watch" />
+
+        <label>Landing URL</label>
+        <input id="ad_land" class="input watch" />
+
+        <div class="twoCol">
+          <div>
+            <label>Status</label>
+            <select id="ad_status" class="input watch">
+              <option value="ACTIVE">ACTIVE</option>
+              <option value="PAUSED">PAUSED</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="actionsRow">
+          <button id="saveBtn" class="btn primary" type="button">Save Changes</button>
+          <a id="analyticsLink" class="btn" href="#">Open Analytics</a>
+        </div>
+      </div>
+
+      <!-- RIGHT: LIVE PREVIEW -->
+      <div class="card previewSticky">
+        <img id="previewImg" class="img" src="" alt="">
+        <div class="cardPad">
+          <div class="row" style="justify-content:space-between; margin:0 0 6px;">
+            <h3 id="previewTitle" style="margin:0;">—</h3>
+            <span id="previewId" class="pill">#—</span>
+          </div>
+
+          <p id="previewDesc" class="muted">—</p>
+
+          <div class="pills">
+            <span id="previewStatus" class="pill">Status: ACTIVE</span>
+          </div>
+
+          <div class="actions">
+            <button class="btn" type="button" disabled style="opacity:.7;">Edit (Preview)</button>
+            <a id="previewOpen" class="btn" href="#" target="_blank" rel="noopener">Open</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { qs, apiGet, apiSend, initThemeToggle, logout } from "./admin.js";
+    initThemeToggle();
+
+    // ✅ Logout
+    document.getElementById("logoutBtn").addEventListener("click", logout);
+
+    const adId = qs("id");
+    if (!adId) location.href = "/admin/ads.html";
+
+    const msg = document.getElementById("msg");
+
+    const titleEl = document.getElementById("title");
+    const analyticsLink = document.getElementById("analyticsLink");
+
+    const fTitle = document.getElementById("ad_title");
+    const fDesc  = document.getElementById("ad_desc");
+    const fImg   = document.getElementById("ad_img");
+    const fLand  = document.getElementById("ad_land");
+    const fStat  = document.getElementById("ad_status");
+
+    const dot = document.getElementById("statusDot");
+    const statusText = document.getElementById("statusText");
+
+    const pImg = document.getElementById("previewImg");
+    const pTitle = document.getElementById("previewTitle");
+    const pDesc = document.getElementById("previewDesc");
+    const pId = document.getElementById("previewId");
+    const pStatus = document.getElementById("previewStatus");
+    const pOpen = document.getElementById("previewOpen");
+
+    async function load() {
+      const data = await apiGet(`/api/admin/ads/${adId}`);
+      const ad = data.ad;
+
+      titleEl.textContent = `Edit Ad #${ad.ad_id}`;
+      analyticsLink.href = `/admin/ad-analytics.html?id=${ad.ad_id}`;
+
+      fTitle.value = ad.title || "";
+      fDesc.value  = ad.description || "";
+      fImg.value   = ad.image_url || "";
+      fLand.value  = ad.landing_url || "";
+      fStat.value  = ad.status || "ACTIVE";
+
+      pId.textContent = `#${ad.ad_id}`;
+
+      updatePreview();
+      updateStatus(fStat.value);
+    }
+
+    function updateStatus(status){
+      statusText.textContent = status;
+      dot.className = status === "ACTIVE" ? "dot" : "dot paused";
+      pStatus.textContent = `Status: ${status}`;
+    }
+
+    function updatePreview(){
+      const title = fTitle.value.trim();
+      const desc  = fDesc.value.trim();
+      const img   = fImg.value.trim();
+      const land  = fLand.value.trim();
+      const status = fStat.value;
+
+      pTitle.textContent = title || "Untitled Ad";
+
+      // Match ads.html: show first 140 chars
+      const shortDesc = (desc || "No description provided.").slice(0, 140);
+      pDesc.textContent = shortDesc;
+
+      if (img) {
+        pImg.src = img;
+        pImg.style.display = "block";
+      } else {
+        pImg.removeAttribute("src");
+        pImg.style.display = "none";
+      }
+
+      if (land) {
+        pOpen.href = land;
+        pOpen.style.pointerEvents = "";
+        pOpen.style.opacity = "";
+      } else {
+        pOpen.href = "#";
+        pOpen.style.pointerEvents = "none";
+        pOpen.style.opacity = "0.6";
+      }
+
+      updateStatus(status);
+    }
+
+    async function save(){
+      try{
+        msg.style.display = "none";
+
+        const payload = {
+          title: fTitle.value,
+          description: fDesc.value,
+          image_url: fImg.value,
+          landing_url: fLand.value,
+          status: fStat.value
+        };
+
+        await apiSend(`/api/admin/ads/${adId}`, "PUT", payload);
+
+        msg.className = "notice ok";
+        msg.textContent = "Changes saved successfully ✅";
+        msg.style.display = "block";
+      } catch(e){
+        msg.className = "notice err";
+        msg.textContent = e.message || "Update failed";
+        msg.style.display = "block";
+      }
+    }
+
+    document.querySelectorAll(".watch").forEach(el => {
+      el.addEventListener("input", updatePreview);
+      el.addEventListener("change", updatePreview);
+    });
+
+    document.getElementById("saveBtn").addEventListener("click", save);
+
+    // Prevent broken-image icon
+    pImg.addEventListener("error", () => {
+      pImg.removeAttribute("src");
+      pImg.style.display = "none";
+    });
+
+    load();
+  </script>
+</body>
+</html>
