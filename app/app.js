@@ -269,30 +269,35 @@ var loadCurrentUser = async function () {
   }
 
   async function logAdEvent(type, ad) {
-    if (!ad || !currentConversationId) return;
-    const meta = lastAdMeta || {};
-    const body = {
-      conversationId: currentConversationId,
-      snapshotId: meta.snapshotId ?? null,
-      decisionId: meta.decisionId ?? null,
-      meta: { type, why: meta.why ?? null },
-    };
+  if (!ad || !currentConversationId) return;
+  const meta = lastAdMeta || {};
+  const body = {
+    conversationId: currentConversationId,
+    snapshotId: meta.snapshotId ?? null,
+    decisionId: meta.decisionId ?? null,
+    meta: { type, why: meta.why ?? null },
+  };
 
-    const url = type === "click"
+  const url =
+    type === "click"
       ? `/api/ads/${ad.adId}/click`
-      : `/api/ads/${ad.adId}/hide`;
+      : type === "hide"
+      ? `/api/ads/${ad.adId}/hide`
+      : type === "render" 
+      ? `/api/ads/${ad.adId}/render`
+      : null; // ✅ NEW
 
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: jsonHeaders,
-        body: JSON.stringify(body),
-      });
-      if (res.status === 401) return handleUnauthorized();
-    } catch (e) {
-      console.warn("ad event failed:", e);
-    }
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    });
+    if (res.status === 401) return handleUnauthorized();
+  } catch (e) {
+    console.warn("ad event failed:", e);
   }
+}
 
   function renderAdBanner(ads, meta) {
     clearAdBanner();
@@ -427,6 +432,8 @@ var loadCurrentUser = async function () {
     card.appendChild(body);
 
     host.appendChild(card);
+    // ✅ Log rendered impression only after it is actually added to the DOM
+    logAdEvent("render", ad);
   }
 
   function renderConversation(conv) {
