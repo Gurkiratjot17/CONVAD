@@ -1,0 +1,159 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="/admin/admin.css" />
+  <title>Admin</title>
+</head>
+<body>
+  <header class="topbar">
+    <div class="navleft">
+      <div class="brand">CONVAD • Admin</div>
+      <a class="btn secondary" href="/admin/index.html">Home</a>
+      <a class="btn secondary" href="/admin/ads.html">Ads</a>
+      <a class="btn secondary" href="/admin/trends.html">Trends</a>
+    </div>
+    <div class="navright">
+      <button id="logoutBtn" class="btn secondary" type="button">Logout</button>
+      <button id="themeToggle" class="btn">☀️ Light</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <h1>Admin Dashboard</h1>
+    <p class="muted">Evaluation snapshot: inventory size, system activity, and where ads are being shown.</p>
+
+    <div class="grid">
+      <!-- KPIs -->
+      <div class="card cardPad" style="grid-column: span 12;">
+        <div class="row" style="justify-content:space-between; margin:0;">
+          <div>
+            <h2>System snapshot</h2>
+            <div class="muted small">Default window: last 7 days</div>
+          </div>
+          <a class="btn" href="/admin/trends.html">View Trends</a>
+        </div>
+
+        <div class="grid" style="grid-template-columns: repeat(6, 1fr); gap: 12px; margin-top:12px;">
+          <div class="kpi">
+            <div class="sub">Impressions</div>
+            <div class="val" id="k_impr">—</div>
+          </div>
+          <div class="kpi">
+            <div class="sub">Rendered Impressions</div>
+            <div class="val" id="k_rimpr">—</div>
+          </div>
+          <div class="kpi">
+            <div class="sub">Clicks</div>
+            <div class="val" id="k_clicks">—</div>
+          </div>
+          <div class="kpi">
+            <div class="sub">Dismisses</div>
+            <div class="val" id="k_dismiss">—</div>
+          </div>
+          <div class="kpi">
+            <div class="sub">CTR</div>
+            <div class="val" id="k_ctr">—</div>
+          </div>
+          <div class="kpi">
+            <div class="sub">Active / Total ads</div>
+            <div class="val" id="k_ads">—</div>
+          </div>
+        </div>
+
+        <div id="dataNote" class="notice" style="display:none; margin-top:12px;"></div>
+
+        <div class="canvasWrap" style="margin-top:12px;">
+          <canvas id="activityChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <a class="card cardPad" style="grid-column: span 6;" href="/admin/ads.html">
+        <h2>Ads Library</h2>
+        <p class="muted">Browse, edit, and inspect analytics for each ad.</p>
+      </a>
+
+      <a class="card cardPad" style="grid-column: span 6;" href="/admin/trends.html">
+        <h2>Trends & Reasons</h2>
+        <p class="muted">Identify trending ads and the keywords/contexts driving them.</p>
+      </a>
+    </div>
+  </main>
+
+  <script type="module">
+    import {
+      initThemeToggle,
+      apiGet,
+      apiSend,
+      logout,
+      drawLineChart,
+      drawBarChart,
+      formatDayLabel,
+      shouldUseBars
+    } from "./admin.js";
+
+    initThemeToggle();
+
+    // ✅ Logout (uses your shared helper)
+    document.getElementById("logoutBtn").addEventListener("click", logout);
+
+    async function load() {
+      // 1) Real KPIs + inventory counts from metrics endpoint
+      const m = await apiGet(`/api/admin/metrics?days=7`);
+
+      const impressionsSelected = Number(m?.events?.impressions_selected || 0);
+      const impressionsRendered = Number(m?.events?.impressions_rendered || 0);
+      const clicks = Number(m?.events?.clicks || 0);
+      const dismisses = Number(m?.events?.dismisses || 0);
+
+      // CTR should match backend (rendered-based). If you want frontend to display exactly backend CTR:
+      const ctrPct = (Number(m?.events?.ctr || 0) * 100).toFixed(2);
+
+      document.getElementById("k_impr").textContent = impressionsSelected;
+      document.getElementById("k_rimpr").textContent = impressionsRendered;
+      document.getElementById("k_clicks").textContent = clicks;
+      document.getElementById("k_dismiss").textContent = dismisses;
+      document.getElementById("k_ctr").textContent = `${ctrPct}%`;
+
+      const activeAds = Number(m?.ads?.active_ads || 0);
+      const totalAds = Number(m?.ads?.total_ads || 0);
+      document.getElementById("k_ads").textContent = `${activeAds} / ${totalAds}`;
+
+      // 2) Activity chart (still time series)
+      const ts = await apiGet(`/api/admin/trends/timeseries?days=7`);
+      const rows = ts.rows || [];
+
+      const labels = rows.map(r => formatDayLabel(r.day));
+      const imprSeries = rows.map(r => Number(r.impressions || 0));
+      const clickSeries = rows.map(r => Number(r.clicks || 0));
+
+      // sparse note
+      const note = document.getElementById("dataNote");
+      const nonZero = [...imprSeries, ...clickSeries].filter(v => v > 0).length;
+      if (labels.length < 4 || nonZero < 4) {
+        note.style.display = "block";
+        note.textContent = "Note: activity data is currently sparse. As more events are logged, this snapshot becomes more meaningful.";
+      } else {
+        note.style.display = "none";
+      }
+
+      // render chart (bars if sparse)
+      const canvas = document.getElementById("activityChart");
+      const useBars = shouldUseBars(labels, [imprSeries, clickSeries]);
+
+      if (useBars) {
+        drawBarChart(canvas, imprSeries, labels, { title: "Daily impressions (7d)" });
+      } else {
+        drawLineChart(canvas, [imprSeries, clickSeries], labels, { title: "Impressions vs Clicks (7d)" });
+      }
+    }
+
+    window.addEventListener("resize", load);
+    document.getElementById("themeToggle").addEventListener("click", () => setTimeout(load, 50));
+
+    load();
+  </script>
+</body>
+</html>
