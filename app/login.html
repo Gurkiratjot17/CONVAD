@@ -82,8 +82,17 @@
           return;
         }
 
-        localStorage.setItem("convad_token", data.token);
-        window.location.href = "/";
+        // Keep existing behavior (some parts of your app may rely on this)
+        if (data.token) {
+          localStorage.setItem("convad_token", data.token);
+        }
+
+        // ✅ NEW: role-aware redirect
+        if (data.role === "ADMIN") {
+          window.location.href = "/admin/index.html";
+        } else {
+          window.location.href = "/";
+        }
       } catch (err) {
         console.error(err);
         msg.textContent = err.message || "Login failed (network/server error)";
