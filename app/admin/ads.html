@@ -1,0 +1,189 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="/admin/admin.css" />
+  <title>Admin • Ads</title>
+</head>
+<body>
+  <header class="topbar">
+    <div class="navleft">
+      <div class="brand">CONVAD • Admin</div>
+      <a class="btn secondary" href="/admin/index.html">Home</a>
+      <a class="btn secondary" href="/admin/ads.html">Ads</a>
+      <a class="btn secondary" href="/admin/trends.html">Trends</a>
+    </div>
+    <div class="navright">
+      <button id="logoutBtn" class="btn secondary" type="button">Logout</button>
+      <button id="themeToggle" class="btn">☀️ Light</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <h1>Ads Library</h1>
+
+    <div class="grid">
+      <div class="card cardPad" style="grid-column: span 12;">
+        <div class="row" style="justify-content:space-between; margin:0;">
+          <div>
+            <h2>Trending Ads</h2>
+            <div class="muted small">
+              Bar chart shows impression volume for ads in the selected window.
+              Trending list is growth-ranked, so use Growth pill to interpret small-volume “spikes”.
+            </div>
+          </div>
+
+          <div class="row" style="margin:0;">
+            <select id="trendHours" class="input" style="min-width:160px;">
+              <option value="24" selected>Window 24h</option>
+              <option value="48">Window 48h</option>
+              <option value="72">Window 72h</option>
+            </select>
+            <a class="btn" href="/admin/trends.html">Open Trends</a>
+          </div>
+        </div>
+
+        <div id="trendSummary" class="pills" style="margin-top:10px;"></div>
+        <div id="trendNote" class="notice" style="display:none; margin-top:10px;"></div>
+
+        <div class="canvasWrap" style="margin-top:12px;">
+          <canvas id="trendBar"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <input id="q" class="input" placeholder="Search ads (id/title/description)..." />
+      <select id="status" class="input">
+        <option value="">All statuses</option>
+        <option value="ACTIVE">ACTIVE</option>
+        <option value="PAUSED">PAUSED</option>
+      </select>
+      <button id="searchBtn" class="btn">Search</button>
+    </div>
+
+    <div id="grid" class="grid"></div>
+  </main>
+
+  <script type="module">
+    import { apiGet, escapeHtml, initThemeToggle, logout, drawBarChart } from "./admin.js";
+
+    initThemeToggle();
+
+    // ✅ Logout
+    document.getElementById("logoutBtn").addEventListener("click", logout);
+
+    async function loadTrendBar(){
+      const hours = document.getElementById("trendHours").value;
+      const note = document.getElementById("trendNote");
+      note.style.display = "none";
+      note.textContent = "";
+
+      const data = await apiGet(`/api/admin/trends?hours=${hours}&minImpressions=1`);
+      const items = (data.trends || []).filter(t => t.ad).slice(0, 10);
+
+      if (!items.length) {
+        document.getElementById("trendSummary").innerHTML = `
+          <span class="pill">Top ads: 0</span>
+          <span class="pill">Window: ${hours}h</span>
+        `;
+        note.style.display = "block";
+        note.textContent = "No trending ads found in this window yet (no impressions logged).";
+        drawBarChart(document.getElementById("trendBar"), [0], ["No data"], { title: `Impressions (${hours}h)` });
+        return;
+      }
+
+      const labels = items.map(t => {
+        const title = (t.ad.title || "").trim();
+        const short = title.length > 10 ? title.slice(0, 10) + "…" : title;
+        return `#${t.ad_id} ${short}`;
+      });
+
+      const value = items.map(t => Number(t.impsel_now || 0));
+      const totalselImpr = value.reduce((a,b)=>a+b,0);
+
+      const values = items.map(t => Number(t.imp_now || 0));
+      const totalImpr = values.reduce((a,b)=>a+b,0);
+
+      const totalClicks = items.reduce((a, t) => a + Number(t.clicks_now || 0), 0);
+
+      // growth ratio for context (can be huge when prev ~ 0)
+      const growths = items.map(t => (Number(t.imp_now || 0) + 1) / (Number(t.imp_prev || 0) + 1));
+      const avgGrowth = growths.reduce((a,b)=>a+b,0) / Math.max(1, growths.length);
+
+      document.getElementById("trendSummary").innerHTML = `
+        <span class="pill">Top ads: ${items.length}</span>
+        <span class="pill">Total Impressions: ${totalselImpr}</span>
+        <span class="pill">Rendered: ${totalImpr}</span>
+        <span class="pill">Clicks: ${totalClicks}</span>
+        <span class="pill">Avg growth: ${avgGrowth.toFixed(2)}×</span>
+        <span class="pill">Window: ${hours}h</span>
+      `;
+
+      drawBarChart(
+        document.getElementById("trendBar"),
+        values,
+        labels,
+        { title: `Impressions (${hours}h)` }
+      );
+    }
+
+    async function loadAds() {
+      const q = document.getElementById("q").value.trim();
+      const status = document.getElementById("status").value.trim();
+
+      const url = new URL("/api/admin/ads", window.location.origin);
+      if (q) url.searchParams.set("q", q);
+      if (status) url.searchParams.set("status", status);
+      url.searchParams.set("limit", "120");
+
+      const data = await apiGet(url.toString());
+      const grid = document.getElementById("grid");
+      grid.innerHTML = "";
+
+      for (const ad of data.ads) {
+        const div = document.createElement("div");
+        div.className = "card";
+        div.style.gridColumn = "span 4";
+        div.innerHTML = `
+          <img class="img" src="${escapeHtml(ad.image_url)}" alt="">
+          <div class="cardPad">
+            <div class="row" style="justify-content:space-between; margin:0 0 6px;">
+              <h3 style="margin:0;">${escapeHtml(ad.title)}</h3>
+              <span class="pill">#${ad.ad_id}</span>
+            </div>
+            <p class="muted">${escapeHtml((ad.description || "").slice(0, 140))}</p>
+            <div class="pills">
+              <span class="pill">Status: ${escapeHtml(ad.status)}</span>
+              ${ad.safety_category ? `<span class="pill">Safety: ${escapeHtml(ad.safety_category)}</span>` : ""}
+              ${ad.geo_scope ? `<span class="pill">Geo: ${escapeHtml(ad.geo_scope)}</span>` : ""}
+              ${ad.price_tier ? `<span class="pill">Price: ${escapeHtml(ad.price_tier)}</span>` : ""}
+            </div>
+            <div class="actions">
+              <a class="btn" href="/admin/ad-edit.html?id=${ad.ad_id}">Edit</a>
+              <a class="btn" href="/admin/ad-analytics.html?id=${ad.ad_id}">Analytics</a>
+            </div>
+          </div>
+        `;
+        grid.appendChild(div);
+      }
+    }
+
+    // Search interactions
+    document.getElementById("searchBtn").addEventListener("click", loadAds);
+    document.getElementById("status").addEventListener("change", loadAds);
+    document.getElementById("q").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") loadAds();
+    });
+
+    // Trending chart interactions
+    document.getElementById("trendHours").addEventListener("change", loadTrendBar);
+    window.addEventListener("resize", loadTrendBar);
+    document.getElementById("themeToggle").addEventListener("click", () => setTimeout(loadTrendBar, 50));
+
+    loadTrendBar();
+    loadAds();
+  </script>
+</body>
+</html>
