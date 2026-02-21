@@ -31,6 +31,7 @@ class SessionService {
     await this.pool.execute(
       `INSERT INTO login_sessions (user_id, refresh_token_hash, expires_at)
        VALUES (?, ?, ?)`,
+
       [userId, tokenHash, this._toMySqlDate(expires)]
     );
 
