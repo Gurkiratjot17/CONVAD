@@ -1,0 +1,617 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="/admin/admin.css" />
+  <title>Admin • Ad Analytics</title>
+</head>
+<body>
+  <header class="topbar">
+    <div class="navleft">
+      <div class="brand">CONVAD • Admin</div>
+      <a class="btn secondary" href="/admin/index.html">Home</a>
+      <a class="btn secondary" href="/admin/ads.html">Ads</a>
+      <a class="btn secondary" href="/admin/trends.html">Trends</a>
+    </div>
+    <div class="navright">
+      <button id="logoutBtn" class="btn secondary" type="button">Logout</button>
+      <button id="themeToggle" class="btn">☀️ Light</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <h1 id="h">Analytics</h1>
+
+    <div class="row">
+      <select id="days" class="input" style="min-width:160px;">
+        <option value="7">Last 7 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+      </select>
+      <a id="editLink" class="btn" href="#">Edit</a>
+    </div>
+
+    <div class="grid">
+      <div class="card cardPad" style="grid-column: span 4;">
+        <h2>KPIs</h2>
+        <div class="grid" style="grid-template-columns:repeat(2,1fr); gap:12px;">
+          <div class="kpi">
+            <div class="sub">Impressions</div>
+            <div class="val" id="k_impr">—</div>
+          </div>
+          <div class="kpi">
+            <div class="sub">Clicks</div>
+            <div class="val" id="k_clicks">—</div>
+          </div>
+          <div class="kpi">
+            <div class="sub">Hides</div>
+            <div class="val" id="k_hides">—</div>
+          </div>
+          <div class="kpi">
+            <div class="sub">CTR</div>
+            <div class="val" id="k_ctr">—</div>
+          </div>
+        </div>
+        <hr class="sep" />
+        <div class="muted small">Use this page for evaluation evidence (volume + engagement + context).</div>
+      </div>
+
+      <div class="card cardPad" style="grid-column: span 8;">
+        <div class="row" style="justify-content:space-between; margin:0;">
+          <div>
+            <h2>Performance over time</h2>
+            <div class="muted small">Chart: impressions, clicks, hides by day.</div>
+          </div>
+        </div>
+
+        <div id="dataNote" class="notice" style="display:none; margin-top:10px;"></div>
+
+        <div class="canvasWrap" style="margin-top:12px;">
+          <canvas id="chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="split" style="margin-top:14px;">
+      <div class="card cardPad">
+        <h2>Daily table</h2>
+        <table>
+          <thead><tr><th>Day</th><th>Impr</th><th>Clicks</th><th>Hides</th></tr></thead>
+          <tbody id="trend"></tbody>
+        </table>
+      </div>
+
+      <div class="card cardPad">
+        <h2>Decisions (click to expand)</h2>
+        <div class="muted small">Collapsed by default — expand a decision only when you want detailed trace_json.</div>
+        <div id="traces" style="margin-top:10px;"></div>
+      </div>
+    </div>
+
+    <div class="card cardPad" style="margin-top:14px;">
+      <h2>Recent contexts (impressions selected)</h2>
+      <table>
+        <thead><tr><th>Time</th><th>Conversation</th><th>Turn</th><th>Context</th></tr></thead>
+        <tbody id="contexts"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script type="module">
+    import {
+      qs,
+      apiGet,
+      escapeHtml,
+      initThemeToggle,
+      logout,
+      drawLineChart,
+      drawBarChart,
+      formatDayLabel,
+      shouldUseBars,
+      fillMissingDays
+    } from "./admin.js";
+
+    initThemeToggle();
+
+    // ✅ Logout
+    document.getElementById("logoutBtn").addEventListener("click", logout);
+
+    const adId = qs("id");
+    if (!adId) location.href = "/admin/ads.html";
+    document.getElementById("editLink").href = `/admin/ad-edit.html?id=${adId}`;
+
+    // -----------------------------
+    // Existing function (kept intact)
+    // -----------------------------
+    function filterTraceForChosen(traceJson, fallbackAdId) {
+      let obj = traceJson;
+
+      // Parse if it's a string
+      if (typeof obj === "string") {
+        try { obj = JSON.parse(obj); } catch { obj = null; }
+      }
+
+      // If parsing failed, return original as string
+      if (!obj || typeof obj !== "object") {
+        return typeof traceJson === "string" ? traceJson : JSON.stringify(traceJson, null, 2);
+      }
+
+      const chosenId =
+        obj?.decision?.chosenAdId ??
+        obj?.decision?.chosen_ad_id ??
+        obj?.refs?.chosenAdId ??
+        Number(fallbackAdId) ??
+        null;
+
+      const filtered = {
+        refs: obj.refs || {},
+        timestamp: obj.timestamp || null,
+        version: obj.version || null,
+
+        policy: obj.policy ? {
+          gated: !!obj.policy.gated,
+          constraints: obj.policy.constraints || {},
+          gateReasons: obj.policy.gateReasons || obj.policy.reasons || []
+        } : null,
+
+        pipeline: obj.pipeline ? {
+          retrieval: obj.pipeline.retrieval || null,
+          ranking: obj.pipeline.ranking || null,
+          eligibleCount: obj.pipeline.eligibleCount ?? null,
+          candidateCount: obj.pipeline.candidateCount ?? null,
+          selectedCount: obj.pipeline.selectedCount ?? null,
+          topScore: obj.pipeline.topScore ?? null
+        } : null,
+
+        chosen: obj.decision ? {
+          adId: obj.decision.chosenAdId ?? chosenId,
+          score: obj.decision.score ?? null,
+          reason: obj.decision.reason ?? null,
+          explanation: obj.decision.explanation ?? null,
+          signals: obj.decision.signals || {},
+          debug: obj.decision.debug || {}
+        } : { adId: chosenId },
+
+        terms: obj.context ? {
+          queryTerms: obj.context.queryTerms || [],
+          keywords: obj.context.keywords || [],
+          queryText: obj.context.queryText || null,
+          intent: obj.context.intent || null,
+          intentConfidence: obj.context.intentConfidence ?? null
+        } : null
+      };
+
+      return JSON.stringify(filtered, null, 2);
+    }
+
+    // -----------------------------
+    // NEW: user-friendly trace renderer
+    // -----------------------------
+    function normArray(x) {
+      if (!x) return [];
+      if (Array.isArray(x)) return x;
+      return [x];
+    }
+
+    function fmtNum(v, digits = 3) {
+      const n = Number(v);
+      if (!Number.isFinite(n)) return "—";
+      return n.toFixed(digits);
+    }
+
+    function fmtMaybe(v) {
+      if (v === null || v === undefined || v === "") return "—";
+      return String(v);
+    }
+
+    function badgeHtml(label, kind = "") {
+      const cls = kind ? `badge ${kind}` : "badge";
+      return `<span class="${cls}">${escapeHtml(label)}</span>`;
+    }
+
+    function chipsHtml(arr) {
+      const items = normArray(arr).filter(Boolean).slice(0, 16);
+      if (!items.length) return `<div class="muted small">None</div>`;
+      return `<div class="chips">${
+        items.map(x => `<span class="chip">${escapeHtml(String(x))}</span>`).join("")
+      }</div>`;
+    }
+
+    /**
+     * Build a friendly “chosen-only” object from your trace_json.
+     * Supports BOTH shapes:
+     * - Old: decision/context
+     * - New: chosen/terms
+     */
+    function toChosenView(traceJson, fallbackAdId) {
+      let obj = traceJson;
+
+      if (typeof obj === "string") {
+        try { obj = JSON.parse(obj); } catch { obj = null; }
+      }
+      if (!obj || typeof obj !== "object") return null;
+
+      const chosenId =
+        obj?.chosen?.adId ??
+        obj?.decision?.chosenAdId ??
+        obj?.decision?.chosen_ad_id ??
+        Number(fallbackAdId) ??
+        null;
+
+      return {
+        refs: obj.refs || {},
+        timestamp: obj.timestamp || null,
+        version: obj.version || null,
+        policy: obj.policy ? {
+          gated: !!obj.policy.gated,
+          constraints: obj.policy.constraints || {},
+          gateReasons: obj.policy.gateReasons || obj.policy.reasons || []
+        } : null,
+        pipeline: obj.pipeline ? {
+          retrieval: obj.pipeline.retrieval || null,
+          ranking: obj.pipeline.ranking || null,
+          eligibleCount: obj.pipeline.eligibleCount ?? null,
+          candidateCount: obj.pipeline.candidateCount ?? null,
+          selectedCount: obj.pipeline.selectedCount ?? null,
+          topScore: obj.pipeline.topScore ?? null
+        } : null,
+        chosen: (obj.chosen || obj.decision) ? {
+          adId: obj.chosen?.adId ?? obj.decision?.chosenAdId ?? chosenId,
+          score: obj.chosen?.score ?? obj.decision?.score ?? null,
+          reason: obj.chosen?.reason ?? obj.decision?.reason ?? null,
+          explanation: obj.chosen?.explanation ?? obj.decision?.explanation ?? null,
+          signals: obj.chosen?.signals ?? obj.decision?.signals ?? {},
+          debug: obj.chosen?.debug ?? obj.decision?.debug ?? {}
+        } : { adId: chosenId },
+        terms: (obj.terms || obj.context) ? {
+          queryTerms: obj.terms?.queryTerms ?? obj.context?.queryTerms ?? [],
+          keywords: obj.terms?.keywords ?? obj.context?.keywords ?? [],
+          queryText: obj.terms?.queryText ?? obj.context?.queryText ?? null,
+          intent: obj.terms?.intent ?? obj.context?.intent ?? null,
+          intentConfidence: obj.terms?.intentConfidence ?? obj.context?.intentConfidence ?? null
+        } : null,
+        raw: obj,
+        alternatives: obj.alternatives || obj.pipeline?.alternatives || obj.decision?.alternatives || null
+      };
+    }
+
+   function formatDateTime(dt) {
+  if (!dt) return "";
+  const d = new Date(dt);
+  if (isNaN(d.getTime())) return dt;
+
+  return d.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+}
+
+    function formatRelativeTime(dt) {
+      if (!dt) return "";
+      const d = new Date(dt);
+      if (isNaN(d.getTime())) return "";
+
+      const now = new Date();
+      const diffMs = now - d;
+      const diffSec = Math.floor(diffMs / 1000);
+      const diffMin = Math.floor(diffSec / 60);
+      const diffHr  = Math.floor(diffMin / 60);
+      const diffDay = Math.floor(diffHr / 24);
+
+      if (diffSec < 60) return `${diffSec}s ago`;
+      if (diffMin < 60) return `${diffMin} min ago`;
+      if (diffHr  < 24) return `${diffHr} hr ago`;
+      if (diffDay < 7)  return `${diffDay} day${diffDay > 1 ? "s" : ""} ago`;
+
+      return ""; // older than a week → absolute time is enough
+    }
+
+    function formatDateWithRelative(dt) {
+      const abs = formatDateTime(dt);
+      const rel = formatRelativeTime(dt);
+      return rel ? `${abs} (${rel})` : abs;
+    }
+
+    function renderTraceCard(t, chosenView) {
+      const v = chosenView;
+      const gated = !!v?.policy?.gated;
+
+      const bGated = gated ? badgeHtml("GATED", "bad") : badgeHtml("NOT GATED", "good");
+      const bRetr = v?.pipeline?.retrieval ? badgeHtml(`Retrieval: ${v.pipeline.retrieval}`) : "";
+      const bRank = v?.pipeline?.ranking ? badgeHtml(`Ranking: ${v.pipeline.ranking}`) : "";
+      const bVer  = v?.version ? badgeHtml(v.version) : "";
+
+      const refs = v?.refs || {};
+      const policy = v?.policy || {};
+      const pipe = v?.pipeline || {};
+      const chosen = v?.chosen || {};
+      const terms = v?.terms || {};
+
+      const score = chosen?.score;
+      const scorePct = Number.isFinite(Number(score))
+        ? Math.max(0, Math.min(100, Number(score) * 100))
+        : null;
+
+      // Optional: alternatives (collapsed)
+      let altBlock = "";
+      if (Array.isArray(v.alternatives) && v.alternatives.length) {
+        const altTrim = v.alternatives.slice(0, 6);
+        altBlock = `
+          <details style="margin-top:12px;">
+            <summary>Alternatives (${v.alternatives.length})</summary>
+            <pre>${escapeHtml(JSON.stringify(altTrim, null, 2))}</pre>
+          </details>
+        `;
+      }
+
+      return `
+        <div class="traceCard">
+          <div class="traceHeader">
+            <div>
+              <div class="traceTitle">
+                Decision #${escapeHtml(t.decision_id)} • Ad #${escapeHtml(chosen.adId ?? "—")}
+              </div>
+
+              <div class="traceMeta">
+                ${escapeHtml(formatDateWithRelative(t.created_at))}
+              </div>
+            </div>
+            <div class="traceHeaderRight">
+              ${bGated}
+              ${bRetr}
+              ${bRank}
+              ${bVer}
+            </div>
+          </div>
+
+          <div class="traceGrid">
+            <!-- Refs -->
+            <div class="traceSection">
+              <h3>Refs</h3>
+              <div class="traceKV">
+                <div class="kv"><div class="k">Conv_Id</div><div class="v">${escapeHtml(fmtMaybe(refs.conversationId))}</div></div>
+                <div class="kv"><div class="k">SnapshotId</div><div class="v">${escapeHtml(fmtMaybe(refs.snapshotId))}</div></div>
+                <div class="kv"><div class="k">TurnIndex</div><div class="v">${escapeHtml(fmtMaybe(refs.turnIndex))}</div></div>
+                
+              </div>
+            </div>
+
+            <!-- Policy -->
+            <div class="traceSection">
+              <h3>Policy</h3>
+              <div class="traceKV">
+                <div class="kv"><div class="k">gated</div><div class="v">${escapeHtml(String(!!policy.gated))}</div></div>
+                <div class="kv"><div class="k">constraints</div><div class="v">${escapeHtml(JSON.stringify(policy.constraints || {}))}</div></div>
+              </div>
+              <div class="muted small" style="margin-top:8px;">Gate reasons</div>
+              ${chipsHtml(policy.gateReasons)}
+            </div>
+
+            <!-- Pipeline -->
+            <div class="traceSection">
+              <h3>Pipeline</h3>
+              <div class="traceKV">
+                <div class="kv"><div class="k">Retrieval</div><div class="v">${escapeHtml(fmtMaybe(pipe.retrieval))}</div></div>
+                <div class="kv"><div class="k">Ranking</div><div class="v">${escapeHtml(fmtMaybe(pipe.ranking))}</div></div>
+                <div class="kv"><div class="k">Eligible</div><div class="v">${escapeHtml(fmtMaybe(pipe.eligibleCount))}</div></div>
+                <div class="kv"><div class="k">Candidate</div><div class="v">${escapeHtml(fmtMaybe(pipe.candidateCount))}</div></div>
+                <div class="kv"><div class="k">Selected</div><div class="v">${escapeHtml(fmtMaybe(pipe.selectedCount))}</div></div>
+                <div class="kv"><div class="k">TopScore</div><div class="v">${escapeHtml(fmtNum(pipe.topScore, 3))}</div></div>
+              </div>
+            </div>
+
+            <!-- Chosen -->
+            <div class="traceSection">
+              <h3>Chosen</h3>
+              <div class="traceKV">
+                <div class="kv"><div class="k">AdId</div><div class="v">${escapeHtml(fmtMaybe(chosen.adId))}</div></div>
+                <div class="kv"><div class="k">Score</div><div class="v">${escapeHtml(fmtNum(chosen.score, 3))}</div></div>
+                <div class="kv"><div class="k">Reason</div><div class="v">${escapeHtml(fmtMaybe(chosen.reason))}</div></div>
+                <div class="kv"><div class="k">Retrieval signal</div><div class="v">${escapeHtml(fmtMaybe(chosen?.signals?.retrieval))}</div></div>
+              </div>
+
+              ${scorePct !== null ? `
+                <div class="muted small" style="margin-top:8px;">Score</div>
+                <div class="scoreBar"><div class="scoreFill" style="width:${scorePct.toFixed(1)}%"></div></div>
+              ` : ""}
+
+              <div class="muted small" style="margin-top:8px;">Explanation</div>
+              <div class="kv" style="margin-top:6px;">
+                <div class="v" style="font-weight:700;">${escapeHtml(fmtMaybe(chosen.explanation))}</div>
+              </div>
+            </div>
+
+            <!-- Terms -->
+            <div class="traceSection full">
+              <h3>Terms used</h3>
+
+              <div class="muted small">Query terms</div>
+              ${chipsHtml(terms.queryTerms)}
+
+              <div class="muted small" style="margin-top:10px;">Keywords</div>
+              ${chipsHtml(terms.keywords)}
+
+              <div class="traceKV" style="margin-top:10px;">
+                <div class="kv"><div class="k">intent</div><div class="v">${escapeHtml(fmtMaybe(terms.intent))}</div></div>
+                <div class="kv"><div class="k">intentConfidence</div><div class="v">${escapeHtml(fmtMaybe(terms.intentConfidence))}</div></div>
+                <div class="kv" style="grid-column: span 2;">
+                  <div class="k">queryText</div>
+                  <div class="v">${escapeHtml(fmtMaybe(terms.queryText))}</div>
+                </div>
+              </div>
+
+              ${altBlock}
+
+              <details style="margin-top:12px;">
+                <summary>Raw trace_json</summary>
+                <pre>${escapeHtml(JSON.stringify(v.raw, null, 2))}</pre>
+              </details>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // -----------------------------
+    // load()
+    // -----------------------------
+    async function load() {
+      const days = Number(document.getElementById("days").value);
+
+      const adResp = await apiGet(`/api/admin/ads/${adId}`);
+      document.getElementById("h").textContent = `Analytics — ${adResp.ad.title} (#${adId})`;
+
+      const data = await apiGet(`/api/admin/ads/${adId}/analytics?days=${days}`);
+
+      // KPIs
+      const k = data.kpi || {};
+      const imprTotal = Number(k.impressions || 0);
+      const clickTotal = Number(k.clicks || 0);
+      const hidesTotal = Number(k.dismisses || 0);
+
+      document.getElementById("k_impr").textContent = imprTotal;
+      document.getElementById("k_clicks").textContent = clickTotal;
+      document.getElementById("k_hides").textContent = hidesTotal;
+      document.getElementById("k_ctr").textContent = `${((Number(k.ctr || 0) * 100).toFixed(2))}%`;
+
+      // Daily series (API returns DESC; convert to full timeline)
+      const dailyDesc = data.daily || [];
+      const filled = fillMissingDays(dailyDesc, days);
+
+      const labels = filled.map(r => formatDayLabel(r.day));
+      const impr = filled.map(r => Number(r.impressions || 0));
+      const clicks = filled.map(r => Number(r.clicks || 0));
+      const hides = filled.map(r => Number(r.dismisses || 0));
+
+      // Data note
+      const note = document.getElementById("dataNote");
+      const nonZero = [...impr, ...clicks, ...hides].filter(v => v > 0).length;
+      if (labels.length < 4 || nonZero < 4) {
+        note.style.display = "block";
+        note.textContent =
+          "Note: this ad has limited/sparse activity in the selected window, so trend shapes may not be stable yet.";
+      } else {
+        note.style.display = "none";
+      }
+
+      // Chart
+      const canvas = document.getElementById("chart");
+      const useBars = shouldUseBars(labels, [impr, clicks, hides]);
+
+      if (useBars) {
+        drawBarChart(canvas, impr, labels, { title: "Daily impressions" });
+      } else {
+        drawLineChart(canvas, [impr, clicks, hides], labels, {
+          title: "Daily performance",
+          names: ["Impressions", "Clicks", "Hides"]
+        });
+      }
+
+      // Daily table (keep DESC like before)
+      const trendBody = document.getElementById("trend");
+      trendBody.innerHTML = "";
+      for (const r of dailyDesc) {
+        trendBody.innerHTML += `<tr>
+          <td>${escapeHtml(formatDayLabel(r.day))}</td>
+          <td>${r.impressions}</td>
+          <td>${r.clicks}</td>
+          <td>${r.dismisses}</td>
+        </tr>`;
+      }
+      if (!dailyDesc.length) {
+        trendBody.innerHTML = `<tr><td colspan="4" class="muted">No activity in this window.</td></tr>`;
+      }
+
+      // Contexts
+      const ctxBody = document.getElementById("contexts");
+      ctxBody.innerHTML = "";
+      for (const c of data.contexts || []) {
+        ctxBody.innerHTML += `<tr>
+          <td>${escapeHtml(formatDateTime(c.event_time))}</td>
+          <td>${escapeHtml(c.conversation_title || ("Conversation " + c.conversation_id))}</td>
+          <td>${c.turn_index}</td>
+          <td>${escapeHtml(c.context_preview || "")}</td>
+        </tr>`;
+      }
+      if (!(data.contexts || []).length) {
+        ctxBody.innerHTML = `<tr><td colspan="4" class="muted">No contexts found.</td></tr>`;
+      }
+
+      // -----------------------------
+      // Decisions (collapsed by default)
+      // Summary shows ONLY essentials:
+      // timestamp + gated + chosen ad + score
+      // -----------------------------
+      const traces = document.getElementById("traces");
+      traces.innerHTML = "";
+
+      for (const t of data.traces || []) {
+        const v = toChosenView(t.trace_json, adId);
+
+        // fallback (still collapsible)
+        if (!v) {
+          const json = (typeof t.trace_json === "string")
+            ? t.trace_json
+            : JSON.stringify(t.trace_json, null, 2);
+
+          traces.innerHTML += `
+            <details class="traceDetails">
+              <summary class="traceSummary">
+                <span class="traceSummaryTitle">Decision #${escapeHtml(t.decision_id)}</span>
+                <span class="traceSummaryPills">
+                  <span class="badge">Ad #—</span>
+                  <span class="badge">Score —</span>
+                </span>
+                <span class="traceSummaryMeta">${escapeHtml(formatDateTime(t.created_at || ""))}</span>
+              </summary>
+              <div class="traceDetailsBody">
+                <pre>${escapeHtml(json)}</pre>
+              </div>
+            </details>
+          `;
+          continue;
+        }
+
+        const chosenId = v?.chosen?.adId ?? "—";
+        const score = (v?.chosen?.score ?? null);
+        const scoreTxt = Number.isFinite(Number(score)) ? Number(score).toFixed(3) : "—";
+        const gated = !!v?.policy?.gated;
+
+        traces.innerHTML += `
+          <details class="traceDetails">
+            <summary class="traceSummary">
+              <span class="traceSummaryTitle">Decision #${escapeHtml(t.decision_id)}</span>
+              <span class="traceSummaryPills">
+                <span class="badge ${gated ? "bad" : "good"}">${gated ? "GATED" : "OK"}</span>
+                <span class="badge">Ad #${escapeHtml(chosenId)}</span>
+                <span class="badge">Score ${escapeHtml(scoreTxt)}</span>
+              </span>
+              <span class="traceSummaryMeta">${escapeHtml(formatDateTime(t.created_at || ""))}</span>
+            </summary>
+
+            <div class="traceDetailsBody">
+              ${renderTraceCard(t, v)}
+            </div>
+          </details>
+        `;
+      }
+
+      if (!(data.traces || []).length) {
+        traces.innerHTML = `<div class="muted">No traces found.</div>`;
+      }
+    }
+
+    document.getElementById("days").addEventListener("change", load);
+
+    window.addEventListener("resize", load);
+    document.getElementById("themeToggle").addEventListener("click", () => setTimeout(load, 50));
+
+    load();
+  </script>
+</body>
+</html>
