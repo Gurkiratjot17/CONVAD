@@ -5,6 +5,7 @@ const AdEventRepository = require("../repositories/AdEventRepository");
 const UserRepository = require("../repositories/UserRepository");
 
 
+
 const router = express.Router();
 const service = new StreamingChatService();
 const adEvents = new AdEventRepository();
@@ -152,6 +153,31 @@ router.post("/ads/:adId/hide", requireAuth, async (req, res) => {
       snapshotId: snapshotId ? Number(snapshotId) : null,
       adId,
       eventType: "hide",
+      eventMeta: { decisionId: decisionId ?? null, ...(meta || {}) },
+    });
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.post("/ads/:adId/render", requireAuth, async (req, res) => {
+  try {
+    const adId = Number(req.params.adId);
+    if (Number.isNaN(adId)) return res.status(400).json({ ok: false, error: "adId must be numeric" });
+
+    const { conversationId, snapshotId, decisionId, meta } = req.body || {};
+    const convId = Number(conversationId);
+    if (!convId || Number.isNaN(convId)) {
+      return res.status(400).json({ ok: false, error: "conversationId is required" });
+    }
+
+    await adEvents.logEvent({
+      conversationId: convId,
+      snapshotId: snapshotId ? Number(snapshotId) : null,
+      adId,
+      eventType: "IMPRESSION_RENDERED", // ✅ must match metrics queries
       eventMeta: { decisionId: decisionId ?? null, ...(meta || {}) },
     });
 
