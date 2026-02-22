@@ -6,27 +6,35 @@
  * Responsibilities:
  * - Decide whether ads should be shown at all (hard gate)
  * - Produce policy constraints used downstream (soft gate)
- * - Keep logic explainable and auditable (for DecisionTracer / dissertation)
+ * - Keep logic explainable and auditable
  *
  * IMPORTANT:
- * This is intentionally conservative. You can relax rules later.
+ * Gate MUST be based on what the user actually saw (IMPRESSION_RENDERED),
+ * not internal selection events.
  */
 
 class IntentPolicyGate {
   constructor({ eventRepo } = {}) {
     this.eventRepo = eventRepo;
 
-    // Frequency caps (very simple, session-based)
-    this.MAX_ADS_PER_CONVERSATION = 6;
-    this.MIN_TURNS_BETWEEN_ADS = 2;
+    // ---------------------------
+    // Rolling frequency caps (NOT lifetime)
+    // ---------------------------
+    // Example: allow up to 2 rendered ads within the last 8 turns.
+    // After enough new turns, the window slides and ads can show again.
+    this.ROLLING_WINDOW_TURNS = 6;
+    this.MAX_RENDERED_ADS_PER_WINDOW = 2;
+
+    // Spacing: minimum turns between rendered ads
+    this.MIN_TURNS_BETWEEN_RENDERED_ADS = 2;
+
+    // Optional cooldown (seconds) after a render
+    this.COOLDOWN_SECONDS_AFTER_RENDER = 30;
 
     // Confidence thresholds
     this.MIN_INTENT_CONFIDENCE = 0.25;
   }
 
-  /**
-   * Evaluate whether ads are allowed and under what constraints.
-   */
   async evaluate({
     conversationId,
     userId,
@@ -45,39 +53,52 @@ class IntentPolicyGate {
     // ---------------------------
     if (safetyFlags && safetyFlags.allow_ads === false) {
       reasons.push("safety_block");
-      return {
-        showAds: false,
-        constraints: {},
-        reasonCodes: reasons,
-      };
+      return { showAds: false, constraints: {}, reasonCodes: reasons };
     }
 
     // ---------------------------
-    // 2) Frequency capping (soft-hard hybrid)
+    // 2) Frequency capping (based on IMPRESSION_RENDERED only)
+    // Rolling window so it never goes silent forever.
     // ---------------------------
     if (this.eventRepo && conversationId != null) {
       try {
-        const stats = await this._getConversationAdStats(conversationId);
+        const ti = Number(turnIndex);
+        const minTurnIndex =
+          Number.isFinite(ti) && ti >= 0
+            ? Math.max(0, ti - this.ROLLING_WINDOW_TURNS + 1)
+            : null;
 
-        if (stats.totalAds >= this.MAX_ADS_PER_CONVERSATION) {
-          reasons.push("frequency_cap_conversation");
-          return {
-            showAds: false,
-            constraints: {},
-            reasonCodes: reasons,
-          };
+        const stats = await this._getConversationAdStats(conversationId, {
+          minTurnIndex,
+        });
+
+        // Rolling window cap: blocks only until enough turns pass
+        if (
+          Number.isFinite(stats.totalRenderedAdsWindow) &&
+          stats.totalRenderedAdsWindow >= this.MAX_RENDERED_ADS_PER_WINDOW
+        ) {
+          reasons.push("frequency_cap_rolling_window");
+          return { showAds: false, constraints: {}, reasonCodes: reasons };
         }
 
+        // Turn spacing: ensure some turns between rendered ads
         if (
-          stats.lastAdTurn != null &&
-          turnIndex - stats.lastAdTurn < this.MIN_TURNS_BETWEEN_ADS
+          stats.lastRenderedTurn != null &&
+          Number.isFinite(ti) &&
+          ti - stats.lastRenderedTurn < this.MIN_TURNS_BETWEEN_RENDERED_ADS
         ) {
           reasons.push("frequency_cap_turn_spacing");
-          return {
-            showAds: false,
-            constraints: {},
-            reasonCodes: reasons,
-          };
+          return { showAds: false, constraints: {}, reasonCodes: reasons };
+        }
+
+        // Optional cooldown by time
+        if (
+          stats.lastRenderedAtMs != null &&
+          Date.now() - stats.lastRenderedAtMs <
+            this.COOLDOWN_SECONDS_AFTER_RENDER * 1000
+        ) {
+          reasons.push("frequency_cap_cooldown");
+          return { showAds: false, constraints: {}, reasonCodes: reasons };
         }
       } catch (e) {
         // Fail-open: do not block ads if analytics fail
@@ -91,8 +112,10 @@ class IntentPolicyGate {
     const intentLabel = intent?.label || "unknown";
     const intentConfidence = Number(intent?.confidence) || 0;
 
-    if (intentLabel === "unknown" || intentConfidence < this.MIN_INTENT_CONFIDENCE) {
-      // Low confidence intent → allow ads but restrict aggressively
+    if (
+      intentLabel === "unknown" ||
+      intentConfidence < this.MIN_INTENT_CONFIDENCE
+    ) {
       reasons.push("low_intent_confidence");
       constraints.soft = true;
     }
@@ -102,7 +125,6 @@ class IntentPolicyGate {
     // ---------------------------
     switch (intentLabel) {
       case "learn":
-        // Avoid aggressive commercial ads
         constraints.allowedCategories = ["education", "productivity", "software"];
         reasons.push("intent_learn");
         break;
@@ -110,7 +132,6 @@ class IntentPolicyGate {
       case "buy":
       case "food":
       case "travel":
-        // Commercial intent: allow broader ads
         reasons.push("intent_commercial");
         break;
 
@@ -120,42 +141,46 @@ class IntentPolicyGate {
         break;
 
       default:
-        // Unknown or mixed intent
         constraints.soft = true;
         reasons.push("intent_unknown");
     }
 
     // ---------------------------
-    // 5) Query heuristics (last guardrail)
+    // 5) Query heuristics (guardrail)
     // ---------------------------
     if (this._looksLikePureQuestion(queryText)) {
-      // “Explain X”, “What is Y” → informational
       constraints.soft = true;
       reasons.push("informational_query");
     }
 
-    // ---------------------------
-    // 6) Final decision
-    // ---------------------------
-    return {
-      showAds: true,
-      constraints,
-      reasonCodes: reasons,
-    };
+    return { showAds: true, constraints, reasonCodes: reasons };
   }
 
   // ---------------------------
   // Helpers
   // ---------------------------
-  async _getConversationAdStats(conversationId) {
-    // Very lightweight analytics query
-    // You already log events with eventType = "impression_selected"
-    const stats = await this.eventRepo.getConversationAdStats(conversationId);
+  async _getConversationAdStats(conversationId, { minTurnIndex = null } = {}) {
+    /**
+     * eventRepo.getConversationAdStats returns stats based on what the user SAW:
+     * - totalRenderedAdsWindow (within minTurnIndex..end if provided)
+     * - lastRenderedTurn
+     * - lastRenderedAt
+     */
+    const stats = await this.eventRepo.getConversationAdStats(conversationId, {
+      minTurnIndex,
+    });
+
+    const lastRenderedAtMs = stats?.lastRenderedAt
+      ? Date.parse(stats.lastRenderedAt)
+      : null;
 
     return {
-      totalAds: Number(stats?.totalAds) || 0,
-      lastAdTurn:
-        stats?.lastAdTurn != null ? Number(stats.lastAdTurn) : null,
+      totalRenderedAdsWindow: Number(stats?.totalRenderedAdsWindow) || 0,
+      lastRenderedTurn:
+        stats?.lastRenderedTurn != null ? Number(stats.lastRenderedTurn) : null,
+      lastRenderedAtMs: Number.isFinite(lastRenderedAtMs)
+        ? lastRenderedAtMs
+        : null,
     };
   }
 
