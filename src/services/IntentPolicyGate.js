@@ -23,10 +23,10 @@ class IntentPolicyGate {
     // Example: allow up to 2 rendered ads within the last 8 turns.
     // After enough new turns, the window slides and ads can show again.
     this.ROLLING_WINDOW_TURNS = 6;
-    this.MAX_RENDERED_ADS_PER_WINDOW = 2;
+    this.MAX_RENDERED_ADS_PER_WINDOW = 6;
 
     // Spacing: minimum turns between rendered ads
-    this.MIN_TURNS_BETWEEN_RENDERED_ADS = 2;
+    this.MIN_TURNS_BETWEEN_RENDERED_ADS = 0;
 
     // Optional cooldown (seconds) after a render
     this.COOLDOWN_SECONDS_AFTER_RENDER = 30;
