@@ -331,7 +331,7 @@ OPENAI_MODEL=gpt-4o-mini
 
 CONVAD investigates:
 
-> How can conversational intent be inferred, scored, gated, and operationalised into real-time ad systems without disrupting conversational UX?
+> How can conversational intent be inferred and used in real-time AI-powered conversational systems to enable monetisation without disrupting the user experience?
 
 It explores:
 
