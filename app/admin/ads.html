@@ -37,8 +37,6 @@
           <div class="row" style="margin:0;">
             <select id="trendHours" class="input" style="min-width:160px;">
               <option value="24" selected>Window 24h</option>
-              <option value="48">Window 48h</option>
-              <option value="72">Window 72h</option>
             </select>
             <a class="btn" href="/admin/trends.html">Open Trends</a>
           </div>
@@ -114,11 +112,7 @@
 
       document.getElementById("trendSummary").innerHTML = `
         <span class="pill">Top ads: ${items.length}</span>
-        <span class="pill">Total Impressions: ${totalselImpr}</span>
-        <span class="pill">Rendered: ${totalImpr}</span>
-        <span class="pill">Clicks: ${totalClicks}</span>
-        <span class="pill">Avg growth: ${avgGrowth.toFixed(2)}×</span>
-        <span class="pill">Window: ${hours}h</span>
+        
       `;
 
       drawBarChart(
