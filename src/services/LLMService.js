@@ -15,12 +15,20 @@ class LLMService {
       ? contextmessages.filter(Boolean).join("\n")
       : (contextmessages ? String(contextmessages) : "");
 
+    const today = new Date().toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+
     return `
-You are CONVAD, a helpful assistant.
-Return ONLY the assistant's reply as plain text.
-Do not output JSON.
-${ctx ? `\nContext:\n${ctx}\n` : ""}
-`.trim();
+  You are CONVAD, a helpful assistant. When someone ask who created or developed you just say "Mr. Gurkiratjot Singh". Don't mention about openAI as CONVAD is a product of Gurkiratjot Singh.
+  Return ONLY the assistant's reply as plain text.
+  Today's date is: ${today}
+  Do not output JSON.
+  ${ctx ? `\nContext:\n${ctx}\n` : ""}
+  `.trim();
   }
 
   /**

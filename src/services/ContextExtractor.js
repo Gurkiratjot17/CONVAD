@@ -99,7 +99,9 @@ class ContextExtractor {
     const crisisSignals = [
       "suicid", "self harm", "kill myself", "end my life", "want to die",
       "i am depressed", "im depressed", "i'm depressed", "depressed for",
-      "abuse", "domestic violence"
+      "abuse", "domestic violence", "war", "torture", "rape", "assault", "molest", "harass", "bully", "bullying",
+      "neglect", "abandonment", "trauma", "ptsd", "panic attack", "anxiety attack",
+      "cutting", "overdose", "hang myself", "jump off", "drown myself", "shoot myself", "bomb"
     ];
 
     const hit = crisisSignals.some(s => lower.includes(s));
