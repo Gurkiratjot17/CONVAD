@@ -13,6 +13,7 @@
       <a class="btn secondary" href="/admin/index.html">Home</a>
       <a class="btn secondary" href="/admin/ads.html">Ads</a>
       <a class="btn secondary" href="/admin/trends.html">Trends</a>
+      <a class="btn secondary" href="http://localhost:8080/">Database</a>
     </div>
     <div class="navright">
       <button id="logoutBtn" class="btn secondary" type="button">Logout</button>
@@ -27,12 +28,21 @@
     <div class="grid">
       <!-- KPIs -->
       <div class="card cardPad" style="grid-column: span 12;">
-        <div class="row" style="justify-content:space-between; margin:0;">
+        <div class="row" style="justify-content:space-between; align-items:flex-start; gap:12px; margin:0; flex-wrap:wrap;">
           <div>
             <h2>System snapshot</h2>
-            <div class="muted small">Default window: last 7 days</div>
+            <div class="muted small" id="windowLabel">Default window: last 7 days</div>
           </div>
-          <a class="btn" href="/admin/trends.html">View Trends</a>
+
+          <div class="row" style="gap:10px; margin:0; align-items:center; flex-wrap:wrap;">
+            <select id="rangeSelect" class="input" style="min-width:160px;">
+              <option value="7" selected>Last 7 days</option>
+              <option value="30">Last 1 month</option>
+              <option value="90">Last 3 months</option>
+              <option value="365">Last 1 year</option>
+            </select>
+            <a class="btn" href="/admin/trends.html">View Trends</a>
+          </div>
         </div>
 
         <div class="grid" style="grid-template-columns: repeat(6, 1fr); gap: 12px; margin-top:12px;">
@@ -86,7 +96,6 @@
     import {
       initThemeToggle,
       apiGet,
-      apiSend,
       logout,
       drawLineChart,
       drawBarChart,
@@ -96,62 +105,90 @@
 
     initThemeToggle();
 
-    // ✅ Logout (uses your shared helper)
-    document.getElementById("logoutBtn").addEventListener("click", logout);
+    const logoutBtn = document.getElementById("logoutBtn");
+    const themeToggle = document.getElementById("themeToggle");
+    const rangeSelect = document.getElementById("rangeSelect");
+    const windowLabel = document.getElementById("windowLabel");
+    const dataNote = document.getElementById("dataNote");
+    const canvas = document.getElementById("activityChart");
+
+    logoutBtn.addEventListener("click", logout);
+
+    function getRangeText(days) {
+      const n = Number(days);
+      if (n === 7) return "last 7 days";
+      if (n === 30) return "last 1 month";
+      if (n === 90) return "last 3 months";
+      if (n === 365) return "last 1 year";
+      return `last ${n} days`;
+    }
 
     async function load() {
-      // 1) Real KPIs + inventory counts from metrics endpoint
-      const m = await apiGet(`/api/admin/metrics?days=7`);
+      const days = Number(rangeSelect.value || 7);
+      const rangeText = getRangeText(days);
+
+      windowLabel.textContent = `Selected window: ${rangeText}`;
+
+      // 1) KPIs + inventory counts
+      const m = await apiGet(`/api/admin/metrics?days=${days}`);
 
       const impressionsSelected = Number(m?.events?.impressions_selected || 0);
       const impressionsRendered = Number(m?.events?.impressions_rendered || 0);
       const clicks = Number(m?.events?.clicks || 0);
       const dismisses = Number(m?.events?.dismisses || 0);
-
-      // CTR should match backend (rendered-based). If you want frontend to display exactly backend CTR:
       const ctrPct = (Number(m?.events?.ctr || 0) * 100).toFixed(2);
 
-      document.getElementById("k_impr").textContent = impressionsSelected;
-      document.getElementById("k_rimpr").textContent = impressionsRendered;
-      document.getElementById("k_clicks").textContent = clicks;
-      document.getElementById("k_dismiss").textContent = dismisses;
+      document.getElementById("k_impr").textContent = impressionsSelected.toLocaleString();
+      document.getElementById("k_rimpr").textContent = impressionsRendered.toLocaleString();
+      document.getElementById("k_clicks").textContent = clicks.toLocaleString();
+      document.getElementById("k_dismiss").textContent = dismisses.toLocaleString();
       document.getElementById("k_ctr").textContent = `${ctrPct}%`;
 
       const activeAds = Number(m?.ads?.active_ads || 0);
       const totalAds = Number(m?.ads?.total_ads || 0);
-      document.getElementById("k_ads").textContent = `${activeAds} / ${totalAds}`;
+      document.getElementById("k_ads").textContent = `${activeAds.toLocaleString()} / ${totalAds.toLocaleString()}`;
 
-      // 2) Activity chart (still time series)
-      const ts = await apiGet(`/api/admin/trends/timeseries?days=7`);
+      // 2) Activity chart
+      const ts = await apiGet(`/api/admin/trends/timeseries?days=${days}`);
       const rows = ts.rows || [];
 
       const labels = rows.map(r => formatDayLabel(r.day));
       const imprSeries = rows.map(r => Number(r.impressions || 0));
       const clickSeries = rows.map(r => Number(r.clicks || 0));
 
-      // sparse note
-      const note = document.getElementById("dataNote");
       const nonZero = [...imprSeries, ...clickSeries].filter(v => v > 0).length;
       if (labels.length < 4 || nonZero < 4) {
-        note.style.display = "block";
-        note.textContent = "Note: activity data is currently sparse. As more events are logged, this snapshot becomes more meaningful.";
+        dataNote.style.display = "block";
+        dataNote.textContent =
+          "Note: activity data is currently sparse. As more events are logged, this snapshot becomes more meaningful.";
       } else {
-        note.style.display = "none";
+        dataNote.style.display = "none";
       }
 
-      // render chart (bars if sparse)
-      const canvas = document.getElementById("activityChart");
       const useBars = shouldUseBars(labels, [imprSeries, clickSeries]);
 
       if (useBars) {
-        drawBarChart(canvas, imprSeries, labels, { title: "Daily impressions (7d)" });
+        drawBarChart(canvas, imprSeries, labels, {
+          title: `Daily impressions (${rangeText})`
+        });
       } else {
-        drawLineChart(canvas, [imprSeries, clickSeries], labels, { title: "Impressions vs Clicks (7d)" });
+        drawLineChart(canvas, [imprSeries, clickSeries], labels, {
+          title: `Impressions vs Clicks (${rangeText})`
+        });
       }
     }
 
-    window.addEventListener("resize", load);
-    document.getElementById("themeToggle").addEventListener("click", () => setTimeout(load, 50));
+    rangeSelect.addEventListener("change", load);
+
+    // redraw after theme change
+    themeToggle.addEventListener("click", () => setTimeout(load, 50));
+
+    // optional: keep this if your chart needs full redraw on resize
+    let resizeTimer;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(load, 120);
+    });
 
     load();
   </script>
