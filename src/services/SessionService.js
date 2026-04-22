@@ -22,18 +22,29 @@ class SessionService {
     return crypto.randomBytes(32).toString("hex");
   }
 
-  async createSession({ userId, ttlHours = 24 * 7 }) {
+  async createSession({ userId, ttlHours = 24 }) {
     const token = this.generateToken();
     const tokenHash = this._hashToken(token);
 
     const expires = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
 
-    await this.pool.execute(
+    const [existingSession] = await this.pool.execute(
+      `SELECT session_id FROM login_sessions WHERE user_id = ? LIMIT 1`,
+      [userId]
+    );
+
+    if (existingSession.length) {
+      await this.pool.execute(
+      `UPDATE login_sessions SET refresh_token_hash = ?, expires_at = ?, created_at = NOW() WHERE user_id = ?`,
+      [tokenHash, this._toMySqlDate(expires), userId]
+      );
+    } else {
+      await this.pool.execute(
       `INSERT INTO login_sessions (user_id, refresh_token_hash, expires_at)
        VALUES (?, ?, ?)`,
-
       [userId, tokenHash, this._toMySqlDate(expires)]
-    );
+      );
+    }
 
     return { token, expiresAt: expires.toISOString() };
   }
