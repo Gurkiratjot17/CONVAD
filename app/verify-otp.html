@@ -1,0 +1,145 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Verify OTP — CONVAD</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="auth-wrap">
+    <!-- ✅ Logo ABOVE the card -->
+    <div class="auth-logo">
+      <img src="/assets/CONVAD.png" alt="CONVAD logo" />
+    </div>
+    <div class="auth-card">
+      <h2>Verify your email</h2>
+      <p class="auth-meta" id="hint"></p>
+
+      <input id="otp" placeholder="Enter 6-digit code" inputmode="numeric" />
+      <button id="verifyBtn" class="btn primary">Verify</button>
+
+      <!-- ✅ Resend line (keeps layout the same: just another meta line) -->
+      <p class="auth-meta" style="margin-top:10px;">
+        Didn’t get a code?
+        <button id="resendBtn" type="button" class="link-btn">Resend</button>
+        <span id="resendStatus" style="margin-left:8px;"></span>
+      </p>
+
+      <p class="auth-meta">
+        Wrong email? <a href="/register.html">Start again</a>
+      </p>
+
+      <div id="msg" class="auth-msg"></div>
+    </div>
+  </div>
+
+  <script>
+    const msg = document.getElementById("msg");
+    const verifyBtn = document.getElementById("verifyBtn");
+    const hint = document.getElementById("hint");
+
+    const resendBtn = document.getElementById("resendBtn");
+    const resendStatus = document.getElementById("resendStatus");
+
+    const pendingId = localStorage.getItem("convad_pending_id");
+    const pendingEmail = localStorage.getItem("convad_pending_email");
+
+    if (!pendingId) {
+      window.location.href = "/register.html";
+    }
+
+    hint.textContent = pendingEmail
+      ? `We sent a code to ${pendingEmail}.`
+      : "We sent a verification code to your email.";
+
+    // Small helper so we don’t crash on non-JSON errors
+    async function safeJson(res) {
+      const text = await res.text().catch(() => "");
+      try { return JSON.parse(text); }
+      catch { return { ok: false, error: text || `Server returned ${res.status}` }; }
+    }
+
+    function setResendCooldown(seconds) {
+      let remaining = seconds;
+      resendBtn.disabled = true;
+
+      const tick = () => {
+        if (remaining <= 0) {
+          resendBtn.disabled = false;
+          resendStatus.textContent = "";
+          return;
+        }
+        resendStatus.textContent = `(${remaining}s)`;
+        remaining -= 1;
+        window.setTimeout(tick, 1000);
+      };
+      tick();
+    }
+
+    verifyBtn.addEventListener("click", async () => {
+      msg.textContent = "";
+
+      const otp = document.getElementById("otp").value.trim();
+      if (!otp) {
+        msg.textContent = "Please enter the code.";
+        return;
+      }
+
+      const res = await fetch("/api/auth/register/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pendingId: Number(pendingId), otp }),
+      });
+
+      const data = await safeJson(res);
+      if (!data.ok) {
+        msg.textContent = data.error || "Verification failed";
+        return;
+      }
+
+      // Now we have a session token just like login
+      localStorage.setItem("convad_token", data.token);
+      localStorage.removeItem("convad_pending_id");
+      localStorage.removeItem("convad_pending_email");
+
+      window.location.href = "/";
+    });
+
+    // ✅ Resend OTP
+    resendBtn.addEventListener("click", async () => {
+      msg.textContent = "";
+      resendStatus.textContent = "";
+
+      try {
+        resendBtn.disabled = true;
+        resendStatus.textContent = "Sending...";
+
+        const res = await fetch("/api/auth/register/resend", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pendingId: Number(pendingId) }),
+        });
+
+        const data = await safeJson(res);
+        if (!data.ok) {
+          resendBtn.disabled = false;
+          resendStatus.textContent = "";
+          msg.textContent = data.error || "Resend failed";
+          return;
+        }
+
+        resendStatus.textContent = "Sent ✅";
+        // simple anti-spam cooldown (UI only)
+        setResendCooldown(30);
+      } catch (e) {
+        resendBtn.disabled = false;
+        resendStatus.textContent = "";
+        msg.textContent = e?.message || "Resend failed (network/server error)";
+      }
+    });
+  </script>
+
+  
+</body>
+</html>

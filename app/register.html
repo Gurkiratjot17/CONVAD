@@ -1,0 +1,220 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Register — CONVAD</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <button 
+  id="themeBtn" 
+  class="btn secondary" 
+  type="button" 
+  aria-label="Toggle theme"
+  style="position:fixed; top:16px; right:16px; z-index:1000;"
+>
+  🌙
+</button>
+  <div class="auth-wrap">
+    <!-- ✅ Logo ABOVE the card -->
+    <div class="auth-logo">
+      <img src="/assets/CONVAD.png" alt="CONVAD logo" />
+    </div>
+    <div class="auth-card">
+      
+
+
+      <h2>Create account</h2>
+
+      <input id="firstName" placeholder="First name" />
+      <input id="lastName" placeholder="Last name" />
+
+      <input
+        id="email"
+        type="email"
+        placeholder="Email"
+        required
+      />
+
+      <div class="password-field">
+        <input
+          id="password"
+          type="password"
+          placeholder="Password (8+ chars: upper, lower, number, symbol)"
+          minlength="8"
+          required
+        />
+        <button
+          type="button"
+          id="togglePassword"
+          class="toggle-password"
+          aria-label="Show password"
+          title="Show password"
+        >👁️</button>
+      </div>
+
+      <div class="password-field">
+        <input
+          id="confirmPassword"
+          type="password"
+          placeholder="Confirm password"
+          required
+        />
+        <button
+          type="button"
+          id="toggleConfirmPassword"
+          class="toggle-password"
+          aria-label="Show password"
+          title="Show password"
+        >👁️</button>
+      </div>
+
+      <div class="terms-row">
+  <label class="terms" for="acceptTerms">
+    <input id="acceptTerms" type="checkbox" />
+    <span>I agree to the</span>
+  </label>
+
+  <a class="terms-link" href="/terms.html" target="_blank" rel="noopener">
+    Terms &amp; Conditions
+  </a>
+</div>
+
+
+      <button
+        id="registerBtn"
+        type="button"
+        class="btn primary"
+      >
+        Register
+      </button>
+
+      <p class="auth-meta">
+        Already have an account?
+        <a href="/login.html">Login</a>
+      </p>
+
+      <div id="msg" class="auth-msg"></div>
+    </div>
+  </div>
+
+  <script>
+    const msg = document.getElementById("msg");
+    const registerBtn = document.getElementById("registerBtn");
+
+    const emailInput = document.getElementById("email");
+    const passwordInput = document.getElementById("password");
+    const confirmInput = document.getElementById("confirmPassword");
+    const acceptTermsEl = document.getElementById("acceptTerms");
+
+    // ----------------------------
+    // Show / Hide password toggles
+    // ----------------------------
+    document.getElementById("togglePassword").addEventListener("click", (e) => {
+      const hidden = passwordInput.type === "password";
+      passwordInput.type = hidden ? "text" : "password";
+      e.target.textContent = hidden ? "🙈" : "👁️";
+      e.target.setAttribute("aria-label", hidden ? "Hide password" : "Show password");
+      e.target.title = hidden ? "Hide password" : "Show password";
+    });
+
+    document.getElementById("toggleConfirmPassword").addEventListener("click", (e) => {
+      const hidden = confirmInput.type === "password";
+      confirmInput.type = hidden ? "text" : "password";
+      e.target.textContent = hidden ? "🙈" : "👁️";
+      e.target.setAttribute("aria-label", hidden ? "Hide password" : "Show password");
+      e.target.title = hidden ? "Hide password" : "Show password";
+    });
+
+    // ----------------------------
+    // Validation helpers
+    // ----------------------------
+    function isValidEmail(email) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
+    }
+
+    function isStrongPassword(pw) {
+      return (
+        pw.length >= 8 &&
+        /[A-Z]/.test(pw) &&
+        /[a-z]/.test(pw) &&
+        /[0-9]/.test(pw) &&
+        /[^A-Za-z0-9]/.test(pw)
+      );
+    }
+
+    // ----------------------------
+    // Register submit
+    // ----------------------------
+    registerBtn.addEventListener("click", async () => {
+      msg.textContent = "";
+
+      const email = emailInput.value.trim();
+      const password = passwordInput.value;
+      const confirmPassword = confirmInput.value;
+
+      if (!isValidEmail(email)) {
+        msg.textContent = "Please enter a valid email address.";
+        return;
+      }
+
+      if (!isStrongPassword(password)) {
+        msg.textContent =
+          "Password must be at least 8 characters and include uppercase, lowercase, number, and symbol.";
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        msg.textContent = "Passwords do not match.";
+        return;
+      }
+
+      const acceptTerms = document.getElementById("acceptTerms")?.checked === true;
+
+      if (!acceptTerms) {
+        msg.textContent = "You must accept the Terms & Conditions to register.";
+        return;
+      }
+
+      const body = {
+        firstName: document.getElementById("firstName").value.trim(),
+        lastName: document.getElementById("lastName").value.trim(),
+        email,
+        password,
+        acceptTerms
+      };
+
+      try {
+        const res = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+        const text = await res.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error(`Server returned ${res.status}`);
+        }
+
+        if (!data.ok) {
+          msg.textContent = data.error || "Registration failed";
+          return;
+        }
+
+        // Save pending registration and go to OTP page
+        localStorage.setItem("convad_pending_id", String(data.pendingId));
+        localStorage.setItem("convad_pending_email", email);
+        window.location.href = "/verify-otp.html";
+      } catch (err) {
+        console.error(err);
+        msg.textContent = err.message || "Registration failed (server error)";
+      }
+    });
+  </script>
+    <script src="/app.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CONVAD</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-top">
+        <a class="brand brand-logo" href="/" aria-label="CONVAD Home">
+          <img src="/assets/CONVAD.PNG" alt="CONVAD" />
+        </a>
+
+        <button id="newChatBtn" class="btn secondary" type="button">New</button>
+        <button id="logoutBtn" class="btn secondary" type="button">Logout</button>
+        <button id="themeBtn" class="btn secondary" type="button" title="Toggle theme">🌙</button>
+      </div>
+
+      <div id="conversationList" class="conversation-list"></div>
+
+      <!-- ✅ Bottom user strip (ChatGPT-style) -->
+<div id="sidebarUserStrip" class="sidebar-user" aria-label="Logged in user">
+  <div class="sidebar-user-left">
+    <div id="sidebarUserAvatar" class="sidebar-user-avatar" aria-hidden="true"></div>
+
+    <div class="sidebar-user-info">
+      <div id="sidebarUserName" class="sidebar-user-name">Loading…</div>
+      <div id="sidebarUserEmail" class="sidebar-user-email"></div>
+    </div>
+  </div>
+
+  <button id="sidebarUserMenu" class="sidebar-user-menu" type="button" aria-label="User menu">⋯</button>
+</div>
+
+
+    </aside>
+
+    <div id="backdrop" class="backdrop"></div>
+
+    <main class="chat">
+      <div class="chat-header">
+        <button id="menuBtn" class="btn secondary mobile-only" type="button" aria-label="Open menu">☰</button>
+        <div id="chatTitle" class="chat-title">New chat</div>
+      </div>
+
+      <div id="messages" class="messages"></div>
+
+      <div class="composer">
+        <textarea id="textInput" rows="1" placeholder="Message CONVAD..."></textarea>
+        <button id="sendBtn" class="btn primary" type="button">Send</button>
+      </div>
+    </main>
+  </div>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

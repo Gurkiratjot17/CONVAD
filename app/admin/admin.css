@@ -1,0 +1,781 @@
+/* /public/admin/admin.css
+   CONVAD Admin Dashboard Styles
+   - Token-based theming (dark + light)
+   - Cards/KPIs/tables/charts
+   - Trace viewer polish (user-friendly sections, badges, chips)
+*/
+
+/* -----------------------------
+   Theme tokens
+------------------------------ */
+:root{
+  --bg:#0b1220;
+  --panel:#0f1a33;
+  --panel2:#0c162d;
+  --line:#23365f;
+  --btn:#16233f;
+  --btnLine:#2a3a62;
+  --text:#e8eefc;
+  --muted:#a9b8da;
+  --link:#8ab4ff;
+  --good:#3ddc97;
+  --warn:#ffd166;
+  --bad:#ff5c7a;
+  --shadow: 0 10px 30px rgba(0,0,0,.25);
+
+  /* dashboard polish */
+  --radius:16px;
+  --radiusSm:12px;
+  --fontSm:12px;
+  --fontBase:14px;
+  --fontH1:26px;
+  --fontH2:18px;
+  --fontH3:15px;
+}
+
+[data-theme="light"]{
+  --bg:#f6f7fb;
+  --panel:#ffffff;
+  --panel2:#f0f3ff;
+  --line:#d8def0;
+  --btn:#eef2ff;
+  --btnLine:#c8d1ff;
+  --text:#111827;
+  --muted:#4b5563;
+  --link:#1d4ed8;
+  --good:#16a34a;
+  --warn:#f59e0b;
+  --bad:#dc2626;
+  --shadow: 0 10px 25px rgba(17,24,39,.08);
+}
+
+/* -----------------------------
+   Base
+------------------------------ */
+*{ box-sizing:border-box; }
+
+body{
+  margin:0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  font-size: var(--fontBase);
+  line-height: 1.45;
+}
+
+a{ color:var(--link); text-decoration:none; }
+a:hover{ text-decoration: underline; text-underline-offset: 3px; }
+
+.wrap{
+  max-width:1180px;
+  margin:0 auto;
+  padding:18px;
+}
+
+h1{ font-size: var(--fontH1); margin: 8px 0 8px; letter-spacing: .2px; }
+h2{ font-size: var(--fontH2); margin: 0 0 8px; letter-spacing: .2px; }
+h3{ font-size: var(--fontH3); margin: 0 0 6px; letter-spacing: .1px; }
+.muted{ color:var(--muted); }
+.small{ font-size: var(--fontSm); }
+
+hr.sep{
+  border:none;
+  border-top:1px solid var(--line);
+  margin:12px 0;
+}
+
+/* -----------------------------
+   Topbar / Nav
+------------------------------ */
+.topbar{
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display:flex;
+  gap:10px;
+  align-items:center;
+  justify-content:space-between;
+  padding:12px 18px;
+  border-bottom:1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.navleft, .navright{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+.brand{
+  font-weight:800;
+  letter-spacing:.3px;
+  padding:10px 12px;
+  border-radius: var(--radiusSm);
+  border:1px solid var(--line);
+  background:var(--panel);
+  box-shadow: var(--shadow);
+}
+
+/* -----------------------------
+   Buttons / Inputs
+------------------------------ */
+.btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:10px 12px;
+  border-radius: var(--radiusSm);
+  border:1px solid var(--btnLine);
+  background:var(--btn);
+  color:var(--link);
+  cursor:pointer;
+  user-select:none;
+  transition: transform .12s ease, border-color .12s ease, filter .12s ease;
+}
+.btn:hover{
+  border-color: color-mix(in srgb, var(--link) 40%, var(--btnLine));
+  transform: translateY(-1px);
+  filter: brightness(1.03);
+}
+.btn:active{ transform: translateY(0px); }
+
+.btn.secondary{
+  color: var(--text);
+  background: var(--panel);
+  border-color: var(--line);
+}
+
+/* Optional: primary CTA button (used by Edit Ad Save button if you add class="btn primary") */
+.btn.primary{
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--link) 30%, var(--btnLine));
+  background: color-mix(in srgb, var(--btn) 70%, var(--link) 10%);
+}
+.btn.primary:hover{
+  border-color: color-mix(in srgb, var(--link) 55%, var(--btnLine));
+}
+
+.row{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:center;
+  margin:12px 0 16px;
+}
+
+.input{
+  padding:10px 12px;
+  border-radius: var(--radiusSm);
+  border:1px solid var(--line);
+  background:var(--panel);
+  color:var(--text);
+  min-width:220px;
+  outline:none;
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+.input:focus{
+  border-color: color-mix(in srgb, var(--link) 55%, var(--line));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--link) 18%, transparent);
+}
+
+/* -----------------------------
+   Layout grids
+------------------------------ */
+.grid{
+  display:grid;
+  gap:14px;
+  grid-template-columns: repeat(12, 1fr);
+}
+@media (max-width: 980px){ .grid{ grid-template-columns: repeat(6, 1fr);} }
+@media (max-width: 640px){ .grid{ grid-template-columns: repeat(1, 1fr);} }
+
+.split{
+  display:grid;
+  grid-template-columns: 1.2fr .8fr;
+  gap:14px;
+}
+@media (max-width: 980px){ .split{ grid-template-columns:1fr; } }
+
+/* -----------------------------
+   Cards / KPIs / Pills
+------------------------------ */
+.card{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius: var(--radius);
+  overflow:hidden;
+  box-shadow: var(--shadow);
+  transition: transform .12s ease, border-color .12s ease, filter .12s ease;
+}
+.card:hover{
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--link) 20%, var(--line));
+  filter: brightness(1.01);
+}
+.cardPad{ padding:14px; }
+
+.kpi{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  padding:12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel2) 70%, transparent);
+}
+.kpi .val{
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: .2px;
+}
+.kpi .sub{
+  font-size: var(--fontSm);
+  color: var(--muted);
+  letter-spacing: .15px;
+}
+
+.pills{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:8px;
+}
+.pill{
+  border:1px solid var(--line);
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  color: color-mix(in srgb, var(--text) 85%, var(--muted));
+  background: color-mix(in srgb, var(--panel2) 75%, transparent);
+}
+
+.actions{
+  display:flex;
+  gap:10px;
+  margin-top:12px;
+  flex-wrap:wrap;
+}
+
+.img{
+  width:100%;
+  height:150px;
+  object-fit:cover;
+  background: color-mix(in srgb, var(--panel2) 65%, transparent);
+  border-bottom:1px solid var(--line);
+}
+
+/* -----------------------------
+   Tables
+------------------------------ */
+table{
+  width:100%;
+  border-collapse:collapse;
+  border-radius: 14px;
+  overflow:hidden;
+}
+th,td{
+  text-align:left;
+  border-bottom:1px solid var(--line);
+  padding:10px 10px;
+  font-size:13px;
+  vertical-align:top;
+}
+th{
+  color: color-mix(in srgb, var(--text) 88%, var(--muted));
+  font-weight: 800;
+  background: color-mix(in srgb, var(--panel2) 70%, transparent);
+}
+tbody tr:nth-child(even){
+  background: color-mix(in srgb, var(--panel2) 45%, transparent);
+}
+tbody tr:hover{
+  background: color-mix(in srgb, var(--link) 10%, transparent);
+}
+
+/* -----------------------------
+   Notices / Charts
+------------------------------ */
+.notice{
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background: color-mix(in srgb, var(--panel2) 85%, transparent);
+  color: color-mix(in srgb, var(--text) 92%, var(--muted));
+}
+
+/* Notice variants (safe): works for edit page without changing base .notice */
+.notice.ok{
+  border-color: color-mix(in srgb, var(--good) 35%, var(--line));
+  background: color-mix(in srgb, var(--good) 12%, var(--panel2));
+}
+.notice.err{
+  border-color: color-mix(in srgb, var(--bad) 35%, var(--line));
+  background: color-mix(in srgb, var(--bad) 12%, var(--panel2));
+}
+
+.canvasWrap{
+  width:100%;
+  height:240px;
+  border-radius:14px;
+  border:1px solid var(--line);
+  background: color-mix(in srgb, var(--panel2) 72%, transparent);
+  overflow:hidden;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 6%, transparent);
+}
+canvas{
+  width:100%;
+  height:100%;
+  display:block;
+}
+
+/* -----------------------------
+   Badges / status helpers
+------------------------------ */
+.clickable{ cursor:pointer; }
+.badgeGood{ color: var(--good); font-weight:800; }
+.badgeWarn{ color: var(--warn); font-weight:800; }
+.badgeBad{ color: var(--bad); font-weight:800; }
+
+/* NEW: modern pill badge */
+.badge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid var(--line);
+  background: color-mix(in srgb, var(--panel2) 75%, transparent);
+  color: color-mix(in srgb, var(--text) 92%, var(--muted));
+  white-space:nowrap;
+}
+.badge.good{ color: var(--good); font-weight:800; }
+.badge.warn{ color: var(--warn); font-weight:800; }
+.badge.bad{  color: var(--bad);  font-weight:800; }
+
+/* -----------------------------
+   <pre> blocks (trace_json + debug)
+------------------------------ */
+pre{
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel2) 72%, transparent);
+  overflow:auto;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* -----------------------------
+   NEW: Trace viewer polish (user-friendly sections)
+   (Works with your planned “renderTraceCard()” HTML)
+------------------------------ */
+.traceCard{
+  border:1px solid var(--line);
+  border-radius: var(--radius);
+  padding:14px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  transition: transform .12s ease, border-color .12s ease;
+}
+
+.traceCard:hover{
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--link) 25%, var(--line));
+}
+
+.traceHeader{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+  margin-bottom:12px;
+}
+
+.traceTitle{
+  font-weight:900;
+  font-size:15px;
+  letter-spacing:.15px;
+}
+
+.traceMeta{
+  font-size:12px;
+  color:var(--muted);
+  margin-top:2px;
+}
+
+.traceHeaderRight{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  justify-content:flex-end;
+  align-items:center;
+}
+
+.traceGrid{
+  display:grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap:12px;
+}
+@media (max-width: 980px){
+  .traceGrid{ grid-template-columns: repeat(6, 1fr); }
+}
+@media (max-width: 640px){
+  .traceGrid{ grid-template-columns: repeat(1, 1fr); }
+}
+
+.traceSection{
+  grid-column: span 6;
+  border:1px solid var(--line);
+  border-radius: var(--radiusSm);
+  padding:10px;
+  background: color-mix(in srgb, var(--panel2) 65%, transparent);
+}
+.traceSection.full{ grid-column: span 12; }
+
+.traceSection h3{
+  margin-bottom:6px;
+  font-size: var(--fontH3);
+}
+
+.traceKV{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:8px 12px;
+  margin-top:6px;
+}
+@media (max-width: 640px){
+  .traceKV{ grid-template-columns: 1fr; }
+}
+
+.kv{
+  padding:8px 10px;
+  border:1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+}
+.kv .k{
+  font-size:12px;
+  color:var(--muted);
+  margin-bottom:2px;
+}
+.kv .v{
+  font-weight:800;
+  font-size:13px;
+  word-break: break-word;
+}
+
+/* ==========================================================
+   FIX: Trace cards overlapping (force grid items to shrink)
+   ========================================================== */
+
+/* allow grid children to shrink instead of overflowing into neighbors */
+.traceGrid,
+.traceSection,
+.traceKV,
+.kv{
+  min-width: 0;
+}
+
+/* make the 2-col KV grid actually shrink nicely */
+.traceKV{
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+/* long values must wrap inside their own card */
+.kv .v{
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* chips also shouldn't push layout wide */
+.chips, .chip{
+  max-width: 100%;
+}
+.chip{
+  overflow-wrap: anywhere;
+}
+
+.chips{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:8px;
+}
+
+.chip{
+  padding:4px 8px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid var(--line);
+  background: color-mix(in srgb, var(--panel2) 75%, transparent);
+  color: color-mix(in srgb, var(--text) 92%, var(--muted));
+}
+
+/* Optional: small score bar (if you decide to render it) */
+.scoreBar{
+  height:10px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 65%, transparent);
+  overflow:hidden;
+  margin-top:8px;
+}
+.scoreFill{
+  height:100%;
+  width:0%;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--good) 85%, transparent),
+    color-mix(in srgb, var(--link) 85%, transparent)
+  );
+}
+
+/* -----------------------------
+   NEW: <details> fallback styling (if you still use <details>)
+------------------------------ */
+details{
+  border:1px solid var(--line);
+  border-radius: var(--radiusSm);
+  background: color-mix(in srgb, var(--panel2) 60%, transparent);
+  padding:10px 12px;
+}
+details + details{ margin-top:10px; }
+
+summary{
+  cursor:pointer;
+  font-weight:800;
+  color: color-mix(in srgb, var(--text) 92%, var(--muted));
+  list-style:none;
+}
+summary::-webkit-details-marker{ display:none; }
+
+details[open]{
+  border-color: color-mix(in srgb, var(--link) 22%, var(--line));
+}
+
+/* -----------------------------
+   Accessibility: reduce motion
+------------------------------ */
+@media (prefers-reduced-motion: reduce){
+  .btn, .card, .input, .traceCard{ transition: none; }
+  .card:hover, .btn:hover, .traceCard:hover{ transform:none; }
+}
+
+/* ==========================================================
+   Trends page: Banner layout (matches trends.html class names)
+   Safe: only affects elements using these classes
+   ========================================================== */
+
+.trendBanner{
+  display:flex;
+  gap:12px;
+  align-items:stretch;
+  border:1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  overflow:hidden;
+  transition: transform .12s ease, border-color .12s ease, filter .12s ease;
+}
+
+.trendBanner:hover{
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--link) 20%, var(--line));
+  filter: brightness(1.01);
+}
+
+.trendBannerImg{
+  width:180px;
+  min-height:120px;
+  object-fit:cover;
+  background: color-mix(in srgb, var(--panel2) 65%, transparent);
+  border-right:1px solid var(--line);
+  flex:0 0 auto;
+}
+
+.trendBannerBody{
+  padding:12px;
+  flex:1 1 auto;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+
+.trendBannerTop{
+  display:flex;
+  gap:10px;
+  justify-content:space-between;
+  align-items:flex-start;
+}
+
+.trendBannerTitle{
+  font-weight:900;
+  font-size:15px;
+  letter-spacing:.15px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:100%;
+}
+
+.trendBannerId{
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel2) 75%, transparent);
+  color: color-mix(in srgb, var(--text) 85%, var(--muted));
+  white-space: nowrap;
+}
+
+.trendBannerDesc{
+  margin-top:6px;
+  font-size:13px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+/* Right-side action column */
+.trendBannerActions{
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  padding:12px;
+  flex:0 0 auto;
+}
+
+/* ==========================================================
+   Edit Ad page (token-based, dark/light safe)
+   - Keeps preview on the right (sticky) so you can edit without scrolling
+   - Does NOT affect ads.html cards (preview uses the same .card/.img/.cardPad)
+   ========================================================== */
+
+.editHeader{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-end;
+  gap:12px;
+  margin-bottom:10px;
+}
+
+.statusBadge{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px 12px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background: color-mix(in srgb, var(--panel2) 70%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 6%, transparent);
+  white-space:nowrap;
+}
+
+.statusBadge .dot{
+  width:10px;
+  height:10px;
+  border-radius:999px;
+  background: var(--good);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 18%, transparent);
+}
+.statusBadge .dot.paused{
+  background: var(--warn);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 18%, transparent);
+}
+
+/* Force true side-by-side: form flexible, preview fixed width */
+.editLayout{
+  display:grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  gap:18px;
+  margin-top:12px;
+  align-items:start;
+}
+
+/* Sticky preview:
+   - Must target the preview card you added: class="card previewSticky"
+   - We also MUST NOT keep overflow:hidden on the sticky element itself (it can break sticky in some layouts)
+*/
+/* Sticky preview card (rounded + clips image properly) */
+.previewSticky{
+  position: sticky;
+  top: 86px; /* below topbar */
+  align-self: start;
+}
+
+/* IMPORTANT: let the card clip its contents so corners look rounded */
+.previewSticky.card{
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/* Responsive fallback */
+@media(max-width: 1100px){
+  .editLayout{
+    grid-template-columns: 1fr;
+  }
+  .previewSticky{
+    position: static;
+    top:auto;
+  }
+}
+
+.sectionTitle{
+  font-weight:900;
+  letter-spacing:.2px;
+  margin-bottom:4px;
+}
+
+.twoCol{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:12px;
+  margin-top:10px;
+}
+@media(max-width: 720px){
+  .twoCol{ grid-template-columns: 1fr; }
+}
+
+/* Scoped spacing polish for edit form */
+.cardPad label{
+  display:block;
+  margin-top:10px;
+  font-weight:800;
+  color: color-mix(in srgb, var(--text) 88%, var(--muted));
+}
+.cardPad label:first-of-type{ margin-top:0; }
+
+.actionsRow{
+  margin-top:14px;
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+
+/* Mobile: stack (Trends only) */
+@media (max-width: 720px){
+  .trendBanner{
+    flex-direction:column;
+  }
+  .trendBannerImg{
+    width:100%;
+    height:180px;
+    border-right:none;
+    border-bottom:1px solid var(--line);
+  }
+  .trendBannerActions{
+    border-left:none;
+    border-top:1px solid var(--line);
+    justify-content:flex-start;
+  }
+}

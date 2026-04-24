@@ -1,0 +1,113 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Login — CONVAD</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+    <button 
+  id="themeBtn" 
+  class="btn secondary" 
+  type="button" 
+  aria-label="Toggle theme"
+  style="position:fixed; top:16px; right:16px; z-index:1000;"
+>
+  🌙
+</button>
+  <div class="auth-wrap">
+    <!-- ✅ Logo ABOVE the card -->
+    <div class="auth-logo">
+      <img src="/assets/CONVAD.png" alt="CONVAD logo" />
+    </div>
+    <div class="auth-card">
+      <h2>Login</h2>
+
+      <input id="email" type="email" placeholder="Email" required />
+
+      <div class="password-field">
+        <input id="password" type="password" placeholder="Password" required />
+        <button
+          type="button"
+          id="togglePassword"
+          class="toggle-password"
+          aria-label="Show password"
+          title="Show password"
+        >👁️</button>
+      </div>
+
+      <button id="loginBtn" type="button" class="btn primary">Login</button>
+
+      <p class="auth-meta">
+        New here? <a href="/register.html">Create an account</a>
+      </p>
+
+      <div id="msg" class="auth-msg"></div>
+    </div>
+  </div>
+
+  <script>
+    const msg = document.getElementById("msg");
+    const loginBtn = document.getElementById("loginBtn");
+
+    // Show/Hide password
+    const passwordInput = document.getElementById("password");
+    const toggleBtn = document.getElementById("togglePassword");
+
+    toggleBtn.addEventListener("click", () => {
+      const hidden = passwordInput.type === "password";
+      passwordInput.type = hidden ? "text" : "password";
+      toggleBtn.textContent = hidden ? "🙈" : "👁️";
+      toggleBtn.setAttribute("aria-label", hidden ? "Hide password" : "Show password");
+      toggleBtn.title = hidden ? "Hide password" : "Show password";
+    });
+
+    loginBtn.addEventListener("click", async () => {
+      msg.textContent = "";
+
+      const body = {
+        email: document.getElementById("email").value.trim(),
+        password: passwordInput.value,
+      };
+
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+        const text = await res.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error(`Server returned ${res.status}: ${text.slice(0, 120)}`);
+        }
+
+        if (!data.ok) {
+          msg.textContent = data.error || "Login failed";
+          return;
+        }
+
+        // Keep existing behavior (some parts of your app may rely on this)
+        if (data.token) {
+          localStorage.setItem("convad_token", data.token);
+        }
+
+        // ✅ NEW: role-aware redirect
+        if (data.role === "ADMIN") {
+          window.location.href = "/admin/index.html";
+        } else {
+          window.location.href = "/";
+        }
+      } catch (err) {
+        console.error(err);
+        msg.textContent = err.message || "Login failed (network/server error)";
+      }
+    });
+  </script>
+   <script src="/app.js" defer></script>
+</body>
+</html>

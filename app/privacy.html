@@ -1,0 +1,149 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Terms & Conditions — CONVAD</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="terms-card">
+      <meta name="description" content="Privacy Notice for CONVAD (Academic Prototype)." />
+  
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.55; }
+    header, main, footer { max-width: 920px; margin: 0 auto; padding: 24px; }
+    header { padding-top: 40px; padding-bottom: 8px; }
+    h1 { font-size: 2rem; margin: 0 0 8px; }
+    .meta { opacity: 0.8; margin: 0 0 20px; }
+    h2 { margin-top: 28px; font-size: 1.25rem; }
+    p, li { font-size: 1rem; }
+    ul { padding-left: 20px; }
+    .card {
+      border: 1px solid rgba(127,127,127,0.25);
+      border-radius: 12px;
+      padding: 18px;
+      background: rgba(127,127,127,0.06);
+      margin: 18px 0;
+    }
+    a { color: inherit; }
+    footer { padding-top: 8px; padding-bottom: 40px; opacity: 0.85; }
+    .small { font-size: 0.92rem; }
+    .divider { height: 1px; background: rgba(127,127,127,0.25); margin: 24px 0; }
+  </style>
+</head>
+
+<body>
+  <button id="themeBtn" class="btn secondary" type="button" aria-label="Toggle theme" style="position:fixed; top:16px; right:16px; z-index:1000;">
+    🌙
+  </button>
+  <header>
+    <h1>Privacy Notice</h1>
+    <p class="meta">
+      CONVAD (Academic Prototype) — Last updated: <time datetime="2026-01-24">24 January 2026</time>
+    </p>
+
+    <div class="card">
+      <p class="small">
+        This notice explains how CONVAD processes personal data. If you do not agree, do not use the Service.
+      </p>
+    </div>
+  </header>
+
+  <main>
+    <h2>1. Data Controller</h2>
+    <p>
+      The Service is operated as an academic project. The Data Controller is the project owner (student developer),
+      for academic research and evaluation purposes.
+    </p>
+
+    <h2>2. Categories of Personal Data</h2>
+    <ul>
+      <li>Conversation content you submit</li>
+      <li>Message metadata (timestamps, message role labels)</li>
+      <li>Pseudonymous identifiers (e.g., user ID or session ID)</li>
+      <li>Inferred conversational topics/intent signals used for contextual advertisement matching (profiling)</li>
+    </ul>
+    <p>
+      The Service does not intentionally collect special category data. Users should avoid submitting sensitive personal information.
+    </p>
+
+    <h2>3. Purposes of Processing</h2>
+    <ul>
+      <li>Provide conversational functionality and continuity</li>
+      <li>Infer real-time conversational context for contextual advertisement selection</li>
+      <li>Maintain system reliability (e.g., debugging, monitoring)</li>
+      <li>Evaluate system performance in an academic context</li>
+    </ul>
+
+    <h2>4. Legal Basis</h2>
+    <p>
+      Processing is conducted under Legitimate Interests (UK GDPR Article 6(1)(f)) for operating and evaluating the prototype,
+      and/or Consent (Article 6(1)(a)) where applicable depending on the deployment design.
+    </p>
+
+    <h2>5. Profiling and Automated Processing</h2>
+    <p>
+      The Service performs automated analysis of conversational text to derive high-level contextual signals for advertisement matching.
+      This is intended to be session-limited, not intended to produce legal or similarly significant effects, and not intended to build
+      persistent behavioural profiles.
+    </p>
+
+    <h2>6. Data Sharing</h2>
+    <p>
+      Personal data is not sold. Data is not shared with third-party advertising networks by default.
+      Limited access may occur only where required for hosting or database operation, subject to appropriate safeguards.
+    </p>
+
+    <h2>7. International Transfers</h2>
+    <p>
+      If hosting infrastructure is located outside the UK/EEA, international transfers may occur.
+      Appropriate safeguards would be required depending on the deployment environment.
+    </p>
+
+    <h2>8. Data Retention</h2>
+    <p>
+      Data is retained only as long as necessary to operate the Service and/or support academic evaluation.
+      Data may be deleted or anonymised after the project evaluation period.
+    </p>
+
+    <h2>9. Security Measures</h2>
+    <p>
+      Reasonable technical and organisational measures are implemented to protect data (e.g., access controls, least-privilege,
+      secure configuration). As an academic prototype, enterprise-grade guarantees cannot be assured.
+    </p>
+
+    <h2>10. Your Rights</h2>
+    <ul>
+      <li>Access, correction, deletion</li>
+      <li>Restriction or objection to processing</li>
+      <li>Withdrawal of consent where consent is used</li>
+      <li>Data portability where applicable</li>
+    </ul>
+
+    <h2>11. Contact</h2>
+    <p>
+      For privacy requests or questions, contact the project owner through the supervising academic institution.
+    </p>
+  </main>
+
+  <footer>
+    <p class="small">
+      © <span id="year"></span> CONVAD (Academic Prototype).
+      <a href="terms.html">Terms and Conditions</a>
+    </p>
+  </footer>
+
+  <script>
+    document.getElementById("year").textContent = String(new Date().getFullYear());
+  </script>
+    <script src="/app.js" defer></script>
+</body>
+</html>
+
+    </div>
+  </div>
+</body>
+</html>
