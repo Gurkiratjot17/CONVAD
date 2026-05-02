@@ -1,10 +1,18 @@
-const { getPool } = require("../db/mysql"); // adjust if your mysql pool path differs
+const { getPool } = require("../db/mysql"); // MySQL connection pool
 
+/*
+ * Utility: safely parse integers with fallback
+ * Prevents NaN issues from query params
+ */
 function safeInt(v, d = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? Math.floor(n) : d;
 }
 
+/*
+ * Tokenizes raw text into lowercase word tokens.
+ * Used for keyword extraction when analysing context.
+ */
 function tokenizeText(text) {
   if (!text) return [];
   return String(text)
@@ -14,6 +22,9 @@ function tokenizeText(text) {
     .filter(Boolean);
 }
 
+/*
+ * Stopword list to remove low-signal terms from keyword extraction.
+ */
 const STOPWORDS = new Set([
   "the","a","an","and","or","but","if","then","else","when","while","is","are","was","were",
   "to","of","in","on","for","with","as","at","by","from","it","this","that","these","those",
@@ -22,6 +33,10 @@ const STOPWORDS = new Set([
   "about","into","over","under","more","most","very"
 ]);
 
+/*
+ * Extract top-N frequent meaningful terms.
+ * Used for "why this ad?" explanations in trends.
+ */
 function topTerms(tokens, { minLen = 3, topN = 12 } = {}) {
   const freq = new Map();
   for (const t of tokens) {
@@ -35,6 +50,10 @@ function topTerms(tokens, { minLen = 3, topN = 12 } = {}) {
     .map(([term, count]) => ({ term, count }));
 }
 
+/*
+ * Extract keywords from trace_json (decision logs).
+ * Supports multiple schema variants for robustness.
+ */
 function extractKeywordsFromTrace(traceJson) {
   const bag = [];
   const pushArr = (x) => Array.isArray(x) && x.forEach(v => v && bag.push(String(v)));
@@ -51,6 +70,16 @@ function extractKeywordsFromTrace(traceJson) {
 }
 
 module.exports = {
+   /*
+   * -------------------------
+   * Ads Listing
+   * -------------------------
+   *
+   * Supports:
+   * - Search (q)
+   * - Status filtering
+   * - Pagination (limit, offset)
+   */
   async listAds(req, res) {
     const pool = getPool();
     const q = (req.query.q || "").trim();
@@ -61,6 +90,7 @@ module.exports = {
     const where = [];
     const params = [];
 
+     // Flexible search across ID, title, description
     if (q) {
       where.push("(a.ad_id LIKE ? OR a.title LIKE ? OR a.description LIKE ?)");
       const like = `%${q}%`;
@@ -90,6 +120,11 @@ module.exports = {
     res.json({ ads, limit, offset });
   },
 
+  /*
+   * -------------------------
+   * Get Single Ad
+   * -------------------------
+   */
   async getAd(req, res) {
     const pool = getPool();
     const adId = safeInt(req.params.adId);
@@ -112,6 +147,13 @@ module.exports = {
     res.json({ ad });
   },
 
+  /*
+   * -------------------------
+   * Update Ad
+   * -------------------------
+   *
+   * Validates required fields before updating.
+   */
   async updateAd(req, res) {
     const pool = getPool();
     const adId = safeInt(req.params.adId);
@@ -122,6 +164,7 @@ module.exports = {
     const landing_url = String(req.body.landing_url || "").trim();
     const status = String(req.body.status || "ACTIVE").trim();
 
+    // Basic validation for required fields
     if (!title) return res.status(400).json({ error: "Title required" });
     if (!image_url) return res.status(400).json({ error: "Image URL required" });
     if (!landing_url) return res.status(400).json({ error: "Landing URL required" });
@@ -138,11 +181,29 @@ module.exports = {
     res.json({ updated: result.affectedRows || 0 });
   },
 
+   /*
+   * -------------------------
+   * Ad Analytics
+   * -------------------------
+   *
+   * Returns:
+   * - KPI metrics (impressions, clicks, CTR)
+   * - Daily breakdown
+   * - Context snapshots
+   * - Decision traces
+   */
   async getAdAnalytics(req, res) {
     const pool = getPool();
     const adId = safeInt(req.params.adId);
     const days = Math.max(1, Math.min(365, safeInt(req.query.days, 30)));
 
+     // KPI aggregation
+    /*
+     * Aggregates core engagement metrics for a single advertisement.
+     *
+     * CTR here is calculated using IMPRESSION_SELECTED as the denominator,
+     * meaning it reflects clicks relative to backend-selected impressions.
+     */
     const [[kpi]] = await pool.execute(
       `
       SELECT
@@ -158,6 +219,9 @@ module.exports = {
       [adId]
     );
 
+     /*
+     * Daily breakdown used by the ad analytics chart and table.
+     */
     const [daily] = await pool.execute(
       `
       SELECT
@@ -174,6 +238,12 @@ module.exports = {
       [adId]
     );
 
+     /*
+     * Retrieves recent conversation contexts where this ad was selected.
+     *
+     * This supports qualitative evaluation by showing what conversation
+     * context led to the advertisement decision.
+     */
     const [contexts] = await pool.execute(
       `
       SELECT
@@ -193,6 +263,9 @@ module.exports = {
       [adId]
     );
 
+      /*
+     * Retrieves recent decision traces for explainability and audit review.
+     */
     const [traces] = await pool.execute(
       `
       SELECT decision_id, created_at, trace_json
@@ -205,14 +278,27 @@ module.exports = {
       [adId]
     );
 
+      /*
+     * Return all analytics sections together for the admin ad analytics page.
+     */
     res.json({ kpi: kpi || {}, daily, contexts, traces });
   },
 
   // Admin snapshot metrics for dashboards/evaluation
+  /*
+   * Returns system-wide dashboard metrics for a selected time window.
+   */
   async getMetrics(req, res) {
     const pool = getPool();
+
+      /*
+     * Clamp analytics range to avoid overly expensive dashboard queries.
+     */
     const days = Math.max(1, Math.min(365, safeInt(req.query.days, 7)));
 
+    /*
+     * Aggregate ad inventory state.
+     */
     const [[adsAgg]] = await pool.execute(
       `
       SELECT
@@ -222,6 +308,12 @@ module.exports = {
       `
     );
 
+     /*
+     * Aggregate interaction events for the selected period.
+     *
+     * CTR here uses IMPRESSION_RENDERED as the denominator because rendered
+     * impressions represent what the user actually saw.
+     */
     const [[eventsAgg]] = await pool.execute(
       `
       SELECT
@@ -236,6 +328,9 @@ module.exports = {
       `
     );
 
+    /*
+     * Convert nullable SQL aggregate results into numeric dashboard values.
+     */
     res.json({
       days,
       ads: {
@@ -252,11 +347,29 @@ module.exports = {
     });
   },
 
+  /*
+   * Calculates trending ads over a recent rolling time window.
+   *
+   * The trend score is heuristic and combines:
+   * - selected impressions
+   * - rendered impressions
+   * - clicks
+   * - hides
+   */
   async getTrends(req, res) {
     const pool = getPool();
+
+     /*
+     * Limit trend window to between 1 hour and 7 days.
+     */
     const hours = Math.max(1, Math.min(168, safeInt(req.query.hours, 24)));
     const minImpressions = Math.max(1, safeInt(req.query.minImpressions, 5));
 
+     /*
+     * Compute current-period and previous-period exposure metrics.
+     *
+     * The ORDER BY formula prioritises ads with stronger adjusted engagement.
+     */
     const [rows] = await pool.execute(
       `
       SELECT
@@ -299,9 +412,15 @@ module.exports = {
       [minImpressions]
     );
 
+     /*
+     * If no ads meet the minimum impression threshold, return an empty trend list.
+     */
     const adIds = rows.map(r => r.ad_id);
     if (!adIds.length) return res.json({ trends: [] });
 
+    /*
+     * Fetch ad metadata for the ranked trend rows.
+     */
     const placeholders = adIds.map(() => "?").join(",");
     const [ads] = await pool.execute(
       `
@@ -312,16 +431,31 @@ module.exports = {
       adIds
     );
 
+    /*
+     * Attach ad metadata to each trend result.
+     */
     const adMap = new Map(ads.map(a => [Number(a.ad_id), a]));
     const trends = rows.map(r => ({ ...r, ad: adMap.get(Number(r.ad_id)) || null }));
     res.json({ trends, hours });
   },
 
+   /*
+   * Extracts keywords explaining why a specific ad is trending.
+   *
+   * Preferred source:
+   * - trace_json from decision records
+   *
+   * Fallback source:
+   * - raw context_text from context snapshots
+   */
   async getTrendReasons(req, res) {
     const pool = getPool();
     const adId = safeInt(req.params.adId);
     const hours = Math.max(1, Math.min(168, safeInt(req.query.hours, 24)));
 
+     /*
+     * First attempt: extract terms from recent decision traces.
+     */
     const [traceRows] = await pool.execute(
       `
       SELECT trace_json
@@ -334,6 +468,9 @@ module.exports = {
       [adId]
     );
 
+     /*
+     * Parse trace_json and collect keyword-like signals.
+     */
     let traceTokens = [];
     for (const r of traceRows) {
       let tj = r.trace_json;
@@ -343,6 +480,9 @@ module.exports = {
       traceTokens.push(...extractKeywordsFromTrace(tj).map(x => String(x).toLowerCase()));
     }
 
+    /*
+     * Fallback: use context snapshots if trace data is too sparse.
+     */
     let snapshotTokens = [];
     if (traceTokens.length < 5) {
       const [snaps] = await pool.execute(
@@ -358,9 +498,16 @@ module.exports = {
         `,
         [adId]
       );
+
+       /*
+       * Tokenise snapshot text into candidate explanatory terms.
+       */
       for (const s of snaps) snapshotTokens.push(...tokenizeText(s.context_text));
     }
 
+      /*
+     * Convert collected tokens into top explanatory keywords.
+     */
     const fromTrace = topTerms(traceTokens, { topN: 12 });
     const fromContext = topTerms(snapshotTokens, { topN: 12 });
 
@@ -372,10 +519,22 @@ module.exports = {
     });
   },
 
+   /*
+   * Returns daily system-wide ad-event time series.
+   *
+   * Used by the admin dashboard trend charts.
+   */
   async getTrendsTimeSeries(req, res) {
     const pool = getPool();
+
+    /*
+     * Clamp dashboard time-series range to avoid excessive query cost.
+     */
     const days = Math.max(3, Math.min(90, safeInt(req.query.days, 14)));
 
+     /*
+     * Aggregate daily event counts across the whole system.
+     */
     const [rows] = await pool.execute(
       `
       SELECT

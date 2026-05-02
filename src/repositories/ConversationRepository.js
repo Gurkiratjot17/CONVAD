@@ -1,6 +1,20 @@
 const { getPool } = require("../db/mysql");
 
+/*
+ * ConversationRepository
+ *
+ * Handles persistence and retrieval of conversations and messages.
+ *
+ * Purpose:
+ * - Store user/assistant chat history
+ * - Retrieve conversations for the UI
+ * - Provide recent messages for LLM context building
+ */
 class ConversationRepository {
+
+   /*
+   * Creates a new conversation for a user.
+   */
   async createConversation({ userId, title = null }) {
     const pool = getPool();
     const [res] = await pool.execute(
@@ -10,6 +24,9 @@ class ConversationRepository {
     return res.insertId; // conversation_id
   }
 
+  /*
+   * Adds a message to an existing conversation.
+   */
   async addMessage({ conversationId, role, content }) {
     const pool = getPool();
     const [res] = await pool.execute(
@@ -19,9 +36,15 @@ class ConversationRepository {
     return res.insertId; // message_id
   }
 
+  /*
+   * Retrieves a conversation and its messages.
+   */
   async getConversation(conversationId) {
     const pool = getPool();
 
+    /*
+     * First fetch conversation metadata.
+     */
     const [convRows] = await pool.execute(
       `SELECT conversation_id, user_id, title, created_at, updated_at
        FROM conversations
@@ -33,6 +56,9 @@ class ConversationRepository {
 
     const conv = convRows[0];
 
+    /*
+     * Then fetch all messages in chronological order.
+     */
     const [msgRows] = await pool.execute(
       `SELECT message_id, role, content, created_at
        FROM messages
@@ -41,6 +67,9 @@ class ConversationRepository {
       [conversationId]
     );
 
+    /*
+     * Convert database fields into application-friendly format.
+     */
     return {
       id: conv.conversation_id,
       userId: conv.user_id,
@@ -56,8 +85,15 @@ class ConversationRepository {
     };
   }
 
+  /*
+   * Lists recent conversations for a user.
+   */
   async listConversations(userId, limit = 50) {
     const pool = getPool();
+
+    /*
+     * Clamp limit to prevent overly large result sets.
+     */
     const lim = Math.max(1, Math.min(200, Number(limit) || 50));
 
     const [rows] = await pool.execute(
@@ -77,6 +113,10 @@ class ConversationRepository {
     }));
   }
 
+  /*
+   * Updates the title of an existing conversation.
+   */
+
   async updateTitle(conversationId, title) {
     const pool = getPool();
     await pool.execute(
@@ -87,8 +127,18 @@ class ConversationRepository {
     );
   }
 
+  /*
+   * Retrieves the most recent N messages for context construction.
+   *
+   * Used by the LLM prompt builder so only a bounded recent context window
+   * is sent to the model.
+   */
   async getLastNMessages(conversationId, n) {
   const pool = getPool();
+
+    /*
+     * Clamp message count to avoid excessive prompt/context size.
+     */
   const lim = Math.max(1, Math.min(200, Number(n) || 6));
 
   // Fetch newest N, then reverse so the LLM sees chronological order
@@ -101,6 +151,9 @@ class ConversationRepository {
     [conversationId]
   );
 
+  /*
+     * Reverse result so messages are returned oldest → newest.
+     */
   return rows
     .reverse()
     .map((m) => ({

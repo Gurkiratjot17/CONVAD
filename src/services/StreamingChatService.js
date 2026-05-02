@@ -1,10 +1,29 @@
 // src/services/StreamingChatService.js
+
+/*
+ * StreamingChatService
+ *
+ * Coordinates the main chat flow:
+ * - conversation creation
+ * - message persistence
+ * - LLM prompt construction
+ * - streaming assistant response
+ * - contextual ad selection
+ * - conversation title generation
+ */
+
 const ConversationRepository = require("../repositories/ConversationRepository");
 const LLMService = require("./LLMService");
 const OpenAIClient = require("./OpenAIClient");
 const ContextBuilder = require("./ContextBuilder");
 const AdService = require("./AdService");
 
+/*
+ * Builds a readable conversation title from the first meaningful user message.
+ *
+ * This avoids generic titles such as "hi" or "hello" and improves
+ * conversation list usability.
+ */
 function buildTitleFromFirstUserMessage(text) {
   const raw = String(text || "").trim();
   if (!raw) return null;
@@ -61,22 +80,44 @@ function buildTitleFromFirstUserMessage(text) {
 
 class StreamingChatService {
   constructor() {
+      /*
+     * Repository and service dependencies used by the streaming chat workflow.
+     */
     this.repo = new ConversationRepository();
     this.llm = new LLMService();
     this.client = new OpenAIClient();
 
-    // Still used for building the LLM prompt context (separate from ad matching)
+     // Still used for building the LLM prompt context (separate from ad matching)
+    /*
+     * ContextBuilder prepares recent messages for the LLM prompt.
+     */
     this.contextBuilder = new ContextBuilder({ repo: this.repo });
 
-    // Ad service now supports contextual matching via AdSelectionService
+     // Ad service now supports contextual matching via AdSelectionService
+    /*
+     * AdService runs contextual advertisement selection after the assistant reply.
+     */
     this.ads = new AdService();
 
+     /*
+     * Context window sizes.
+     *
+     * LAST_N is used by ContextBuilder for prompt context.
+     * LAST_M is used for messages passed to the LLM and ad-matching context.
+     */
     this.LAST_N = 3;  // used by ContextBuilder
     this.LAST_M = 3;  // used for LLM messages sent to model + ad matching context
   }
 
+
+  /*
+   * Streams a chat response and performs contextual ad selection.
+   */
   async streamChat({ userId, conversationId, text, onToken }) {
     // 1) Validate / create conversation
+    /*
+     * Use existing conversation if supplied; otherwise create a new one.
+     */
     let convId = conversationId ? Number(conversationId) : null;
     if (conversationId && Number.isNaN(convId)) throw new Error("conversationId must be numeric");
 
@@ -85,23 +126,39 @@ class StreamingChatService {
     }
 
     // 2) Persist user message
+    /*
+     * Store user message before calling the LLM so the database remains
+     * the source of truth for conversation history.
+     */
     await this.repo.addMessage({ conversationId: convId, role: "user", content: text });
 
     // 3) Build prompt context (for the LLM only)
+    /*
+     * Build recent contextual messages for prompt construction.
+     */
     const contextMessages = await this.contextBuilder.build({
       conversationId: convId,
       lastN: this.LAST_N,
     });
 
     // 4) Load conversation messages (DB truth) to send to LLM
+    /*
+     * Reload messages from storage to ensure the LLM receives DB-consistent state.
+     */
     const convBefore = await this.repo.getConversation(convId);
     const messagesForLLM = (convBefore.messages || [])
       .slice(-this.LAST_M)
       .map((m) => ({ role: m.role, content: m.content }));
 
+     /*
+     * Build the system prompt for normal assistant response generation.
+     */
     const system = this.llm.replyOnlySystemPrompt({ contextmessages: contextMessages });
 
     // 5) Stream assistant reply
+     /*
+     * Stream model output token-by-token to support low-latency UX.
+     */
     let fullReply = "";
     await this.client.chatStream({
       system,
@@ -113,18 +170,33 @@ class StreamingChatService {
     });
 
     // 6) Persist assistant reply
+     /*
+     * Store the completed assistant reply after streaming finishes.
+     */
     await this.repo.addMessage({ conversationId: convId, role: "assistant", content: fullReply });
 
     // 7) Reload conversation to ensure ads are matched against DB-consistent context
+     /*
+     * Ad matching happens after the assistant response so the ad pipeline
+     * can consider the latest conversational turn.
+     */
     const convAfter = await this.repo.getConversation(convId);
     const messagesForAds = (convAfter.messages || [])
       .slice(-this.LAST_M)
       .map((m) => ({ role: m.role, content: m.content }));
 
     // Turn index = number of messages stored so far (simple, consistent)
+    /*
+     * Turn index gives the ad policy gate a simple measure of conversation progress.
+     */
     const turnIndex = (convAfter.messages || []).length;
 
     // 8) Contextual ad selection (no tags)
+    /*
+     * Run contextual ad selection using recent messages only.
+     *
+     * This supports session-level ad targeting without persistent profiling.
+     */
     const { ads: matchedAds, snapshotId, decisionId, why } =
       await this.ads.selectAdsForConversation({
         conversationId: convId,
@@ -133,6 +205,9 @@ class StreamingChatService {
         messages: messagesForAds,
       });
 
+    /*
+     * Development/evaluation log for tracing ad-selection results.
+     */
     console.log("[ContextualAds]", {
       conversationId: convId,
       userId,
@@ -143,9 +218,15 @@ class StreamingChatService {
     });
 
     // 9) Title if missing (run once)
+    /*
+     * Generate a conversation title only if one has not already been set.
+     */
     const updated = await this.repo.getConversation(convId);
 
     if (!updated.title) {
+      /*
+       * Find the first user message that can produce a meaningful title.
+       */
       const firstMeaningfulUser =
         (updated.messages || []).find(
           (m) => m.role === "user" && buildTitleFromFirstUserMessage(m.content)
@@ -156,6 +237,9 @@ class StreamingChatService {
     }
 
     // 10) Response payload (frontend can ignore meta for now)
+    /*
+     * Return chat metadata and selected ads to the frontend.
+     */
     return {
       conversationId: convId,
       ads: matchedAds,
@@ -163,12 +247,18 @@ class StreamingChatService {
     };
   }
 
+   /*
+   * Retrieves a single conversation by ID.
+   */
   async getConversation(conversationId) {
     const id = Number(conversationId);
     if (Number.isNaN(id)) throw new Error("conversationId must be numeric");
     return this.repo.getConversation(id);
   }
 
+   /*
+   * Lists conversations for a user.
+   */
   async listConversations(userId) {
     return this.repo.listConversations(userId);
   }

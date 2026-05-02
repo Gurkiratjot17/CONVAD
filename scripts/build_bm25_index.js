@@ -4,6 +4,12 @@
 const { getPool } = require("../src/db/mysql");
 
 // --- lightweight tokenizer ---
+/*
+ * STOP words set
+ *
+ * Common words removed during tokenization to reduce noise
+ * and improve retrieval quality.
+ */
 const STOP = new Set([
   "the","a","an","and","or","but","if","then","else","to","of","in","on","for","with","at","by",
   "i","you","we","they","he","she","it","is","are","was","were","be","been","being",
@@ -14,6 +20,15 @@ const STOP = new Set([
   "today","tomorrow","yesterday","please","thanks","thank",
 ]);
 
+/*
+ * Tokenization function
+ *
+ * Converts raw text into normalized tokens:
+ * - lowercases text
+ * - removes punctuation
+ * - splits into words
+ * - removes stopwords, numbers, and very short tokens
+ */
 function tokenize(text) {
   const t = String(text || "")
     .toLowerCase()
@@ -27,14 +42,27 @@ function tokenize(text) {
     .filter(w => w.length >= 2 && !STOP.has(w) && !/^\d+$/.test(w));
 }
 
+/*
+ * Utility function to split arrays into chunks
+ *
+ * Used for batching large inserts into the database.
+ */
 function chunk(arr, size) {
   const out = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
 }
 
+/*
+ * Ensures required BM25 index tables exist.
+ *
+ * Tables:
+ * - ad_terms: inverted index postings (term frequency per ad)
+ * - term_stats: document frequency per term
+ * - ad_stats: document length per ad
+ * - corpus_stats: global corpus statistics
+ */
 async function ensureTables(pool) {
-  // Inverted index tables (minimal)
   await pool.execute(`
     CREATE TABLE IF NOT EXISTS ad_terms (
       ad_id BIGINT NOT NULL,
@@ -70,6 +98,11 @@ async function ensureTables(pool) {
   `);
 }
 
+/*
+ * Clears existing BM25 index tables.
+ *
+ * This ensures a full rebuild rather than incremental updates.
+ */
 async function clearTables(pool) {
   await pool.execute(`DELETE FROM ad_terms`);
   await pool.execute(`DELETE FROM term_stats`);
@@ -77,8 +110,13 @@ async function clearTables(pool) {
   await pool.execute(`DELETE FROM corpus_stats`);
 }
 
+/*
+ * Fetches all active ads.
+ *
+ * Prefers preprocessed ad_text from ad_context_index,
+ * falling back to title + description if needed.
+ */
 async function fetchAds(pool) {
-  // Use ad_text from ad_context_index if present; else fall back to title+description
   const [rows] = await pool.execute(`
     SELECT
       a.ad_id,
@@ -93,6 +131,12 @@ async function fetchAds(pool) {
   return rows || [];
 }
 
+/*
+ * Batch insert helper.
+ *
+ * Builds parameterised multi-row INSERT statements
+ * to improve database write efficiency.
+ */
 async function insertMany(pool, sql, rows, batchSize = 1000) {
   const batches = chunk(rows, batchSize);
   for (const b of batches) {
@@ -120,8 +164,11 @@ async function main() {
   const ads = await fetchAds(pool);
   console.log(`✅ Loaded ${ads.length} ads`);
 
-  const df = new Map(); // term -> doc frequency
-  const adDocLen = new Map(); // ad_id -> doc_len
+  /*
+   * Data structures for building BM25 index
+   */
+  const df = new Map(); // term -> document frequency
+  const adDocLen = new Map(); // ad_id -> document length
   const adTermTfRows = []; // [ad_id, term, tf]
 
   let totalLen = 0;
@@ -130,6 +177,11 @@ async function main() {
   console.log("🧠 Building term frequencies + df...");
   for (const a of ads) {
     const adId = Number(a.ad_id);
+
+    /*
+     * Use precomputed ad_text where available,
+     * otherwise construct from title + description.
+     */
     const text = String(a.ad_text || `${a.title || ""} ${a.description || ""}`).trim();
     const terms = tokenize(text);
 
@@ -139,13 +191,20 @@ async function main() {
     totalLen += terms.length;
     adDocLen.set(adId, terms.length);
 
-    // TF per doc
+    /*
+     * Compute term frequency (TF) for this document.
+     */
     const tf = new Map();
     for (const t of terms) tf.set(t, (tf.get(t) || 0) + 1);
 
-    // DF update (unique terms per doc)
+    /*
+     * Update document frequency (DF) using unique terms.
+     */
     for (const t of tf.keys()) df.set(t, (df.get(t) || 0) + 1);
 
+    /*
+     * Store postings (ad_id, term, tf).
+     */
     for (const [term, count] of tf.entries()) {
       // cap tf to avoid pathological docs
       const safeTf = Math.min(255, Number(count) || 0);
@@ -153,6 +212,9 @@ async function main() {
     }
   }
 
+  /*
+   * Compute average document length for BM25 normalization.
+   */
   const avgDocLen = totalDocs > 0 ? totalLen / totalDocs : 100;
 
   console.log("💾 Writing ad_stats...");

@@ -1,6 +1,26 @@
 const { getPool } = require("../db/mysql");
 
+/*
+ * ContextSnapshotRepository
+ *
+ * Persists contextual snapshots used during ad selection.
+ *
+ * Purpose:
+ * - Store the conversation context at the moment an ad decision is made
+ * - Support explainability and audit trails
+ * - Allow later evaluation of why specific ads were selected
+ */
 class ContextSnapshotRepository {
+
+  /*
+   * Inserts a new context snapshot for a conversation turn.
+   *
+   * Stored fields include:
+   * - structured context JSON
+   * - raw context text
+   * - optional embedding data
+   * - optional safety flags
+   */
   async insertSnapshot({
     conversationId,
     turnIndex,
@@ -10,6 +30,13 @@ class ContextSnapshotRepository {
     safetyFlagsJson = null,
   }) {
     const pool = getPool();
+
+    /*
+     * Store JSON fields using MySQL JSON casting.
+     *
+     * This keeps context data structured and queryable while preserving
+     * the exact state used during decision-making.
+     */
     const [res] = await pool.execute(
       `
       INSERT INTO conversation_context_snapshots
@@ -28,6 +55,12 @@ class ContextSnapshotRepository {
     return res.insertId;
   }
 
+  /*
+   * Retrieves the latest context snapshot for a conversation.
+   *
+   * Useful for debugging, analytics, or reviewing the most recent
+   * context used by the ad-selection system.
+   */
   async getLatestSnapshot(conversationId) {
     const pool = getPool();
     const [rows] = await pool.execute(

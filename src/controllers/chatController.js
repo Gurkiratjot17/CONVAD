@@ -2,10 +2,19 @@ const StreamingChatService = require("../services/StreamingChatService");
 const AdEventRepository = require("../repositories/AdEventRepository");
 const UserRepository = require("../repositories/UserRepository");
 
+/*
+ * Service instances:
+ * - StreamingChatService → handles conversation + LLM + ad pipeline
+ * - AdEventRepository → logs user interactions with ads
+ * - UserRepository → fetches user data
+ */
 const service = new StreamingChatService();
 const adEvents = new AdEventRepository();
 const users = new UserRepository();
 
+/*
+ * Returns current authenticated user profile.
+ */
 async function getMe(req, res) {
   try {
     const user = await users.getById(req.userId);
@@ -20,6 +29,9 @@ async function getMe(req, res) {
   }
 }
 
+/*
+ * Lists all conversations for the authenticated user.
+ */
 async function listConversations(req, res) {
   try {
     const conversations = await service.listConversations(req.userId);
@@ -29,6 +41,10 @@ async function listConversations(req, res) {
   }
 }
 
+/*
+ * Retrieves a single conversation.
+ * Includes ownership check to prevent access to other users' conversations.
+ */
 async function getConversation(req, res) {
   try {
     const conversation = await service.getConversation(req.params.id);
@@ -43,33 +59,60 @@ async function getConversation(req, res) {
   }
 }
 
+/*
+ * Streams chat responses using Server-Sent Events (SSE).
+ *
+ * Flow:
+ * - Validate input
+ * - Set SSE headers
+ * - Stream tokens from LLM in real-time
+ * - Send final response including ads + metadata
+ */
 async function streamChat(req, res) {
   try {
     const { conversationId, text } = req.body || {};
 
+    /*
+     * Validate user input.
+     */
     if (!text || typeof text !== "string") {
       return res.status(400).json({ ok: false, error: "text is required" });
     }
 
-    // SSE headers
+    /*
+     * Set SSE headers for real-time streaming.
+     */
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no");
+    res.setHeader("X-Accel-Buffering", "no");  // disables proxy buffering
     res.flushHeaders?.();
 
-    // immediate ping
+    /*
+     * Send initial ping to establish connection.
+     */
     res.write(`event: ping\ndata: {}\n\n`);
 
-    // keepalive
+    /*
+     * Keep connection alive (important for proxies / long responses).
+     */
     const keepAlive = setInterval(() => {
       res.write(`event: ping\ndata: {}\n\n`);
     }, 15000);
 
+     /*
+     * Clean up on client disconnect.
+     */
     req.on("close", () => {
       clearInterval(keepAlive);
     });
 
+     /*
+     * Execute chat pipeline:
+     * - LLM streaming
+     * - context extraction
+     * - ad selection
+     */
     const result = await service.streamChat({
       userId: req.userId,
       conversationId: conversationId ?? null,
@@ -81,6 +124,9 @@ async function streamChat(req, res) {
 
     clearInterval(keepAlive);
 
+    /*
+     * Send final event with conversation metadata + ads.
+     */
     res.write(
       `event: done\ndata: ${JSON.stringify({
         conversationId: result.conversationId,
@@ -92,6 +138,11 @@ async function streamChat(req, res) {
     res.end();
   } catch (e) {
     console.error(e);
+
+  
+    /*
+     * Send SSE error event if something fails mid-stream.
+     */
     try {
       res.write(`event: error\ndata: ${JSON.stringify({ error: e.message })}\n\n`);
     } catch {}
@@ -99,6 +150,10 @@ async function streamChat(req, res) {
   }
 }
 
+/*
+ * Logs ad click interaction.
+ * This represents explicit user engagement.
+ */
 async function logAdClick(req, res) {
   try {
     const adId = Number(req.params.adId);
@@ -127,6 +182,10 @@ async function logAdClick(req, res) {
   }
 }
 
+/*
+ * Logs ad hide interaction.
+ * Represents negative feedback / user rejection.
+ */
 async function logAdHide(req, res) {
   try {
     const adId = Number(req.params.adId);
@@ -155,6 +214,12 @@ async function logAdHide(req, res) {
   }
 }
 
+/*
+ * Logs ad render event.
+ * IMPORTANT:
+ * This is the key signal for what the user actually SAW.
+ * Used by IntentPolicyGate for frequency capping.
+ */
 async function logAdRender(req, res) {
   try {
     const adId = Number(req.params.adId);

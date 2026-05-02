@@ -1,13 +1,31 @@
 // src/repositories/UserRepository.js
 const { getPool } = require("../db/mysql");
 
+/*
+ * UserRepository
+ *
+ * Handles retrieval of user data from the database.
+ *
+ * Purpose:
+ * - Provide user profile information for authenticated sessions
+ * - Supply minimal user data for UI rendering and identity display
+ */
 class UserRepository {
   constructor() {
+    /*
+     * Reuse shared MySQL connection pool.
+     */
     this.pool = getPool();
   }
 
   /**
    * Fetch minimal user profile for UI/session use
+   *
+   * Only returns non-sensitive fields:
+   * - No password hashes
+   * - No authentication metadata
+   *
+   * This ensures separation between identity data and auth data.
    */
   async getById(userId) {
     const [rows] = await this.pool.execute(
@@ -28,6 +46,10 @@ class UserRepository {
     if (!rows.length) return null;
 
     const u = rows[0];
+
+    /*
+     * Map database fields to application-friendly format.
+     */
     return {
       userId: u.user_id,
       firstName: u.first_name || null,

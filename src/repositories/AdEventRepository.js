@@ -1,7 +1,29 @@
 // src/repositories/AdEventRepository.js
 const { getPool } = require("../db/mysql");
 
+/*
+ * Repository responsible for logging and retrieving advertisement-related events.
+ *
+ * These events are critical for:
+ * - Analytics (CTR, impressions, trends)
+ * - Policy enforcement (frequency capping)
+ * - Evaluation (user interaction analysis)
+ */
 class AdEventRepository {
+
+   /*
+   * Logs an advertisement-related event.
+   *
+   * Parameters:
+   * - conversationId → conversation where event occurred
+   * - snapshotId → context snapshot reference (optional)
+   * - adId → associated ad (nullable for system events)
+   * - eventType → type of event (e.g., CLICK, HIDE, IMPRESSION_RENDERED)
+   * - eventMeta → additional metadata (JSON)
+   *
+   * Returns:
+   * - eventId (primary key)
+   */
   async logEvent({
     conversationId,
     snapshotId = null,
@@ -11,7 +33,10 @@ class AdEventRepository {
   }) {
     const pool = getPool();
 
-    // Normalize to avoid case drift bugs (you use IMPRESSION_RENDERED)
+    /*
+     * Normalize event type to uppercase to avoid inconsistencies
+     * (important for analytics queries and policy logic).
+     */
     const et = String(eventType || "").trim().toUpperCase();
 
     const [res] = await pool.execute(
@@ -31,35 +56,43 @@ class AdEventRepository {
     return res.insertId;
   }
 
-  /**
-   * Used by IntentPolicyGate for frequency caps (ROLLING WINDOW).
+  /*
+   * Computes conversation-level ad statistics.
    *
-   * Caps are based on what the user actually saw:
-   *   event_type = 'IMPRESSION_RENDERED'
+   * Used by IntentPolicyGate for frequency control.
    *
-   * Params:
-   *  - opts.minTurnIndex: if provided, count only renders with turn_index >= minTurnIndex
+   * Key principle:
+   * - Only considers IMPRESSION_RENDERED (what user actually saw)
+   *
+   * Parameters:
+   * - conversationId
+   * - opts.minTurnIndex → limits stats to recent turns (rolling window)
    *
    * Returns:
-   *  {
-   *    totalRenderedAdsWindow: number,
-   *    lastRenderedTurn: number|null,
-   *    lastRenderedAt: string|null
-   *  }
+   * {
+   *   totalRenderedAdsWindow → number of rendered ads in window
+   *   lastRenderedTurn → last turn index where an ad was shown
+   *   lastRenderedAt → timestamp of last rendered ad
+   * }
    *
-   * Notes:
-   * - Best path uses snapshot join to filter by turn_index.
-   * - If snapshot join isn't available, we degrade gracefully:
-   *     - window count falls back to counting all renders (still safe, just less precise)
-   *     - lastRenderedTurn may be null
+   * Design approach:
+   * - Prefer accurate join with snapshot table (turn-aware)
+   * - Fall back gracefully if schema differs or fails
    */
   async getConversationAdStats(conversationId, opts = {}) {
     const pool = getPool();
+
+     /*
+     * Constant representing the "visible exposure" signal.
+     */
     const RENDERED_EVENT = "IMPRESSION_RENDERED";
     const minTurnIndex =
       opts && opts.minTurnIndex != null ? Number(opts.minTurnIndex) : null;
 
-    // 1) Latest render timestamp (no joins needed)
+    /*
+     * 1) Get latest render timestamp.
+     * No joins required → fast and reliable.
+     */
     let lastRenderedAt = null;
     try {
       const [rows] = await pool.execute(
@@ -80,11 +113,16 @@ class AdEventRepository {
       lastRenderedAt = null;
     }
 
-    // 2) Window count + last turn (prefer snapshot join so window is truly "last N turns")
+    /*
+     * 2) Compute rolling window count + last rendered turn.
+     * Prefer joining with snapshot table for accurate turn-based filtering.
+     */
     let totalRenderedAdsWindow = 0;
     let lastRenderedTurn = null;
 
-    // Try: conversation_context_snapshots
+    /*
+     * Attempt 1: join with conversation_context_snapshots (preferred schema).
+     */
     try {
       const [rows] = await pool.execute(
         `
@@ -107,7 +145,10 @@ class AdEventRepository {
       lastRenderedTurn = v === null || v === undefined ? null : Number(v);
       if (!Number.isFinite(lastRenderedTurn)) lastRenderedTurn = null;
     } catch (e1) {
-      // Fallback: context_snapshots
+
+      /*
+       * Attempt 2: fallback schema (context_snapshots).
+       */
       try {
         const [rows2] = await pool.execute(
           `
@@ -130,7 +171,11 @@ class AdEventRepository {
         lastRenderedTurn = v2 === null || v2 === undefined ? null : Number(v2);
         if (!Number.isFinite(lastRenderedTurn)) lastRenderedTurn = null;
       } catch (e2) {
-        // Degrade gracefully: count without turn window (still prevents "stuck forever")
+        
+        /*
+         * Attempt 3: degrade gracefully (no turn-awareness).
+         * Still safe for frequency capping, but less precise.
+         */
         try {
           const [countRows] = await pool.execute(
             `

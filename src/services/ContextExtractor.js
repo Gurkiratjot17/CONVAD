@@ -1,11 +1,33 @@
 // src/services/ContextExtractor.js
 
+/*
+ * ContextExtractor
+ *
+ * Extracts lightweight session-level context from recent conversation messages.
+ *
+ * Responsibilities:
+ * - Identify keywords and phrases from the current conversation
+ * - Build canonical query text for retrieval and embedding
+ * - Infer lightweight intent using a simple lexicon
+ * - Detect safety-sensitive contexts where ads should be restricted
+ *
+ * This supports CONVAD's design goal of selecting ads from immediate
+ * conversational intent rather than persistent user profiling.
+ */
+
 class ContextExtractor {
   constructor() {
+     /*
+     * Output limits keep retrieval inputs bounded and reduce noisy terms.
+     */
     this.MAX_KEYWORDS = 12;
     this.MAX_PHRASES = 6;
     this.MAX_QUERY_TERMS = 18;
 
+    /*
+     * Stop words are excluded because they add little retrieval value
+     * and can weaken keyword-based matching.
+     */
     this.STOP = new Set([
       "the","a","an","and","or","but","if","then","else","to","of","in","on","for","with","at","by",
       "i","you","we","they","he","she","it","is","are","was","were","be","been","being",
@@ -16,13 +38,23 @@ class ContextExtractor {
       "today","tomorrow","yesterday","please","thanks","thank"
     ]);
 
-    // role weighting: prioritize user intent
+   // role weighting: prioritize user intent
+    /*
+     * User messages receive higher weight because they usually contain
+     * the strongest signal of current intent.
+     */
     this.ROLE_WEIGHT = {
       user: 2,
       assistant: 1
     };
 
     // Very lightweight intent lexicon (upgrade later / swap for LLM classifier)
+     /*
+     * Simple intent lexicon used for fast, deterministic intent inference.
+     *
+     * This is intentionally lightweight and explainable, but less flexible
+     * than an LLM-based classifier.
+     */
     this.INTENT_LEXICON = {
       buy: ["buy", "purchase", "order", "price", "cheap", "deal", "discount", "shop"],
       learn: ["learn", "study", "course", "tutorial", "explain", "how", "guide"],
@@ -33,6 +65,9 @@ class ContextExtractor {
     };
   }
 
+  /*
+   * Tokenises text into lowercase word-like units.
+   */
   _tokenize(text) {
     return String(text || "")
       .toLowerCase()
@@ -42,6 +77,9 @@ class ContextExtractor {
       .filter(Boolean);
   }
 
+  /*
+   * Filters out weak tokens that are unlikely to improve retrieval.
+   */
   _isGoodToken(t) {
     if (!t) return false;
     if (t.length < 3) return false;
@@ -51,6 +89,12 @@ class ContextExtractor {
     return true;
   }
 
+   /*
+   * Extracts weighted keywords from recent messages.
+   *
+   * User terms receive greater weight than assistant terms so the
+   * output better reflects user intent rather than generated responses.
+   */
   _keywordsFromMessages(messages) {
     const freq = new Map();
 
@@ -70,6 +114,12 @@ class ContextExtractor {
       .map(([t]) => t);
   }
 
+   /*
+   * Extracts simple bigram phrases from user messages only.
+   *
+   * This gives the retrieval pipeline short contextual phrases such as
+   * "machine learning" or "job interview" instead of isolated words only.
+   */
   _phrasesFromMessages(messages) {
     // simple bigrams from USER messages only (best signal)
     const freq = new Map();
@@ -92,6 +142,12 @@ class ContextExtractor {
       .map(([p]) => p);
   }
 
+   /*
+   * Detects safety-sensitive conversation contexts.
+   *
+   * If crisis or abuse-related signals are found, ads are marked as unsafe
+   * so the policy gate can prevent monetisation in inappropriate contexts.
+   */
   _safetyFlagsFromText(text) {
     const lower = String(text || "").toLowerCase();
 
@@ -111,6 +167,12 @@ class ContextExtractor {
     return { allow_ads: true, restricted: [] };
   }
 
+   /*
+   * Infers a lightweight intent label using keyword matching.
+   *
+   * This is fast and explainable, but should be treated as approximate
+   * rather than a full semantic intent classifier.
+   */
   _inferIntentFromText(text) {
     const lower = String(text || "").toLowerCase();
     const scores = new Map();
@@ -138,6 +200,12 @@ class ContextExtractor {
     return { label: topIntent, confidence, scores: scoreObj };
   }
 
+   /*
+   * Builds a canonical query string for hybrid retrieval.
+   *
+   * The last user message is combined with extracted phrases and keywords
+   * to produce a stable query representation for BM25 and embeddings.
+   */
   _buildQueryText({ userText, keywords, phrases }) {
     // Stable canonical query: last user intent + top phrases + top keywords
     const parts = [];
@@ -151,6 +219,12 @@ class ContextExtractor {
       .slice(0, 1200); // keep embedding input bounded
   }
 
+  /*
+   * Builds unique query terms used by lexical retrieval.
+   *
+   * Query text is preferred because it combines recent user intent,
+   * phrases, and keywords into one canonical representation.
+   */
   _buildQueryTerms({ queryText, keywords }) {
     // Prefer tokenizing queryText, then backfill from keywords
     const tokens = this._tokenize(queryText).filter(t => this._isGoodToken(t));
@@ -175,17 +249,39 @@ class ContextExtractor {
     return out;
   }
 
+   /*
+   * Main extraction method used by the ad-selection pipeline.
+   *
+   * It transforms recent conversation messages into a structured context
+   * object containing summary text, intent, keywords, phrases, query fields,
+   * and safety flags.
+   */
   extract({ messages }) {
+     /*
+     * Limit context to the most recent messages.
+     *
+     * This keeps extraction focused on current session intent and avoids
+     * older conversation turns dominating ad selection.
+     */
     const boundedMessages = (messages || []).slice(-12);
 
+     /*
+     * Build raw context text for snapshotting, safety checks, and traceability.
+     */
     const contextText = boundedMessages
       .map(m => `${m.role}: ${m.content}`)
       .join("\n")
       .slice(-4000);
 
+     /*
+     * Extract lexical signals from the bounded context window.
+     */
     const keywords = this._keywordsFromMessages(boundedMessages);
     const phrases = this._phrasesFromMessages(boundedMessages);
 
+    /*
+     * Detect whether ads should be restricted because of sensitive context.
+     */
     const safety = this._safetyFlagsFromText(contextText);
 
     // Last user message is typically the strongest signal for intent/query
@@ -199,6 +295,10 @@ class ContextExtractor {
     // Lightweight intent inference (used by IntentPolicyGate)
     const intent = this._inferIntentFromText(queryText);
 
+    /*
+     * Context card is a compact structured representation stored in snapshots
+     * and used later for explainability in decision traces.
+     */
     const contextCard = {
       summary: contextText.slice(-600), // placeholder summary (upgrade later)
       intent: intent?.label || "unknown",

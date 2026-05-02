@@ -15,6 +15,10 @@
 
 class IntentPolicyGate {
   constructor({ eventRepo } = {}) {
+    /*
+     * Event repository is used to inspect rendered ad history
+     * for frequency capping and cooldown decisions.
+     */
     this.eventRepo = eventRepo;
 
     // ---------------------------
@@ -36,6 +40,14 @@ class IntentPolicyGate {
     this.STRONG_INTENT_CONFIDENCE = 0.6;
   }
 
+   /*
+   * Evaluates whether ads may be shown for the current conversational turn.
+   *
+   * Output:
+   * - showAds: hard decision
+   * - constraints: downstream filtering/ranking constraints
+   * - reasonCodes: explainable audit labels
+   */
   async evaluate({
     conversationId,
     userId,
@@ -52,6 +64,12 @@ class IntentPolicyGate {
     // ---------------------------
     // 1) Hard safety gate
     // ---------------------------
+     /*
+     * Safety has highest priority.
+     *
+     * If the conversation is marked unsafe for advertising, the gate blocks
+     * all ads regardless of intent, retrieval, or ranking.
+     */
     if (safetyFlags && safetyFlags.allow_ads === false) {
       reasons.push("safety_block");
       return { showAds: false, constraints: {}, reasonCodes: reasons };
@@ -61,9 +79,19 @@ class IntentPolicyGate {
     // 2) Frequency capping (based on IMPRESSION_RENDERED only)
     // Rolling window so it never goes silent forever.
     // ---------------------------
+     /*
+     * Frequency caps use rendered impressions rather than selected impressions.
+     *
+     * This matters because selected ads are internal backend decisions, while
+     * rendered ads represent what the user actually experienced.
+     */
     if (this.eventRepo && conversationId != null) {
       try {
         const ti = Number(turnIndex);
+
+        /*
+         * Calculate the lower bound of the rolling turn window.
+         */
         const minTurnIndex =
           Number.isFinite(ti) && ti >= 0
             ? Math.max(0, ti - this.ROLLING_WINDOW_TURNS + 1)
@@ -103,6 +131,10 @@ class IntentPolicyGate {
         }
       } catch (e) {
         // Fail-open: do not block ads if analytics fail
+        /*
+         * If frequency checks fail, the gate records the issue but avoids
+         * blocking ads purely because analytics lookup failed.
+         */
         reasons.push("frequency_check_failed");
       }
     }
@@ -110,10 +142,18 @@ class IntentPolicyGate {
     // ---------------------------
     // 3) Intent-based gating
     // ---------------------------
+     /*
+     * Intent is normalised into a canonical policy category so downstream
+     * rules do not need to handle many equivalent labels.
+     */
     const rawIntentLabel = intent?.label || "unknown";
     const intentConfidence = Number(intent?.confidence) || 0;
     const intentLabel = this._normalizeIntent(rawIntentLabel);
 
+     /*
+     * Low-confidence or unknown intent does not immediately block ads.
+     * Instead, it marks the decision as soft/uncertain for downstream handling.
+     */
     if (
       intentLabel === "unknown" ||
       intentConfidence < this.MIN_INTENT_CONFIDENCE
@@ -125,6 +165,9 @@ class IntentPolicyGate {
     // ---------------------------
     // 4) Intent → policy constraints
     // ---------------------------
+    /*
+     * Convert the canonical intent label into allowed/blocked categories.
+     */
     this._applyIntentPolicy({
       intentLabel,
       intentConfidence,
@@ -135,17 +178,29 @@ class IntentPolicyGate {
     // ---------------------------
     // 5) Query heuristics (guardrail)
     // ---------------------------
+     /*
+     * Informational questions may still allow ads, but are treated more softly
+     * because the user may be seeking explanation rather than commercial action.
+     */
     if (this._looksLikePureQuestion(queryText)) {
       constraints.soft = true;
       reasons.push("informational_query");
     }
 
+       /*
+     * Sensitive queries are marked so downstream filtering can behave more
+     * cautiously even when the hard safety gate has not triggered.
+     */
     if (this._looksSensitiveQuery(queryText, safetyFlags)) {
       constraints.soft = true;
       constraints.sensitive = true;
       reasons.push("sensitive_query");
     }
 
+      /*
+     * Transactional phrasing is recorded as an additional signal that the
+     * user may be open to commercial or service-related ads.
+     */
     if (this._looksTransactionalQuery(queryText, queryTerms)) {
       reasons.push("transactional_query");
     }
@@ -153,6 +208,9 @@ class IntentPolicyGate {
     // ---------------------------
     // 6) Final hard-block checks from constraints
     // ---------------------------
+    /*
+     * Some intent policies mark the interaction as blocked after analysis.
+     */
     if (constraints.blocked === true) {
       reasons.push("policy_blocked_intent");
       return { showAds: false, constraints: {}, reasonCodes: reasons };
@@ -164,6 +222,9 @@ class IntentPolicyGate {
   // ---------------------------
   // Helpers
   // ---------------------------
+    /*
+   * Reads conversation-level ad exposure statistics used by frequency caps.
+   */
   async _getConversationAdStats(conversationId, { minTurnIndex = null } = {}) {
     /**
      * eventRepo.getConversationAdStats returns stats based on what the user SAW:
@@ -175,6 +236,9 @@ class IntentPolicyGate {
       minTurnIndex,
     });
 
+     /*
+     * Convert timestamp to milliseconds for cooldown comparison.
+     */
     const lastRenderedAtMs = stats?.lastRenderedAt
       ? Date.parse(stats.lastRenderedAt)
       : null;
@@ -189,6 +253,12 @@ class IntentPolicyGate {
     };
   }
 
+    /*
+   * Normalises raw intent labels into broader policy groups.
+   *
+   * This allows the system to accept different upstream intent labels while
+   * still applying a consistent policy framework.
+   */
   _normalizeIntent(label) {
     const x = String(label || "")
       .trim()
@@ -196,6 +266,9 @@ class IntentPolicyGate {
 
     if (!x) return "unknown";
 
+     /*
+     * Intent groups map multiple variants into a canonical policy category.
+     */
     const INTENT_GROUPS = {
       learn: [
         "learn",
@@ -460,13 +533,26 @@ class IntentPolicyGate {
       ],
     };
 
+       /*
+     * Return the canonical intent group when a variant matches.
+     */
     for (const [canonical, variants] of Object.entries(INTENT_GROUPS)) {
       if (variants.includes(x)) return canonical;
     }
 
+     /*
+     * Preserve formatted unknown labels if they appear intentionally structured;
+     * otherwise fall back to unknown.
+     */
     return x.includes("_") || x.includes("-") ? x.replace(/[_-]+/g, "-") : "unknown";
   }
 
+  /*
+   * Applies category constraints based on canonical intent.
+   *
+   * This method does not retrieve ads directly; it only prepares policy
+   * constraints for later filtering and ranking stages.
+   */
   _applyIntentPolicy({ intentLabel, intentConfidence, constraints, reasons }) {
     switch (intentLabel) {
       // ---------------------------
@@ -699,11 +785,17 @@ class IntentPolicyGate {
         break;
     }
 
+      /*
+     * Record strong intent confidence as an explanatory reason.
+     */
     if (intentConfidence >= this.STRONG_INTENT_CONFIDENCE) {
       reasons.push("intent_confident");
     }
   }
 
+   /*
+   * Detects whether the query appears primarily informational.
+   */
   _looksLikePureQuestion(text) {
     const t = String(text || "").toLowerCase().trim();
     if (!t) return false;
@@ -722,6 +814,9 @@ class IntentPolicyGate {
     );
   }
 
+    /*
+   * Detects sensitive query patterns that should make ad handling more cautious.
+   */
   _looksSensitiveQuery(text, safetyFlags) {
     if (safetyFlags?.sensitive === true) return true;
 
@@ -755,6 +850,9 @@ class IntentPolicyGate {
     return sensitivePatterns.some((p) => t.includes(p));
   }
 
+   /*
+   * Detects commercial or action-oriented query patterns.
+   */
   _looksTransactionalQuery(text, queryTerms) {
     const t = String(text || "").toLowerCase().trim();
     const joinedTerms = Array.isArray(queryTerms)

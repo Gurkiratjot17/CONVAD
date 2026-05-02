@@ -1,8 +1,22 @@
 // src/services/LLMService.js
+
+/*
+ * LLMService
+ *
+ * Provides higher-level language model functionality for CONVAD.
+ *
+ * Responsibilities:
+ * - Build system prompts for assistant replies
+ * - Delegate chat completion requests to OpenAIClient
+ * - Optionally support LLM-based context extraction in future
+ */
 const OpenAIClient = require("./OpenAIClient");
 
 class LLMService {
   constructor() {
+      /*
+     * OpenAIClient handles the lower-level API communication.
+     */
     this.client = new OpenAIClient();
   }
 
@@ -15,6 +29,9 @@ class LLMService {
       ? contextmessages.filter(Boolean).join("\n")
       : (contextmessages ? String(contextmessages) : "");
 
+    /*
+     * Add current date so the assistant has basic temporal awareness.
+     */
     const today = new Date().toLocaleDateString('en-US', { 
         weekday: 'long', 
         year: 'numeric', 
@@ -65,12 +82,22 @@ Rules:
 - safety.allow_ads false if the user expresses self-harm intent or crisis content.
 `.trim();
 
+ /*
+     * Send messages to the LLM using the context-extraction prompt.
+     */
     const raw = await this.client.chat({
       system,
       messages: Array.isArray(messages) ? messages : [],
     });
 
+     /*
+     * Extract JSON from the model response.
+     */
     const jsonStr = this._extractJson(raw);
+
+     /*
+     * Fail-safe fallback if the model does not return parseable JSON.
+     */
     if (!jsonStr) {
       return {
         intent: "unknown",
@@ -82,6 +109,9 @@ Rules:
     }
 
     try {
+       /*
+       * Parse and validate the model output into a predictable shape.
+       */
       const parsed = JSON.parse(jsonStr);
 
       return {
@@ -99,6 +129,9 @@ Rules:
           : { allow_ads: true, restricted: [] },
       };
     } catch {
+       /*
+       * Fail-safe fallback if JSON parsing fails.
+       */
       return {
         intent: "unknown",
         keywords: [],
@@ -110,6 +143,13 @@ Rules:
   }
 
   // ---- helpers ----
+
+  /*
+   * Extracts the first JSON-like object from a raw model response.
+   *
+   * This protects against cases where the model accidentally includes
+   * extra text before or after the JSON object.
+   */
   _extractJson(raw) {
     const text = String(raw || "");
     const s = text.indexOf("{");

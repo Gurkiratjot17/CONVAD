@@ -1,4 +1,15 @@
 // src/services/AdService.js
+
+/*
+ * AdService
+ *
+ * Thin abstraction layer over AdSelectionService.
+ *
+ * Purpose:
+ * - Provides a clean, stable interface for other services (e.g., StreamingChatService)
+ * - Decouples higher-level application logic from the underlying ad-selection pipeline
+ * - Allows future extension (e.g., caching, A/B testing, fallback strategies)
+ */
 const AdSelectionService = require("./AdSelectionService");
 
 class AdService {

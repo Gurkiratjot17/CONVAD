@@ -1,16 +1,33 @@
 // scripts/seed_ads_unique_1000.js
 /* eslint-disable no-console */
 
+/*
+ * Seed Ads Script
+ *
+ * Purpose:
+ * - Generate a large, deterministic, realistic ad inventory
+ * - Avoid duplicate ads using a stable dedupe key
+ * - Populate both ads and ad_context_index tables
+ * - Support BM25 retrieval, embedding generation, and evaluation testing
+ */
+
 const crypto = require("crypto");
 const { getPool } = require("../src/db/mysql");
 
 // ----------------------------
 // helpers
 // ----------------------------
+
+/*
+ * Creates a SHA-256 hash for stable identifiers.
+ */
 function sha256(s) {
   return crypto.createHash("sha256").update(String(s)).digest("hex");
 }
 
+/*
+ * Converts text into a URL-safe slug.
+ */
 function slugify(s) {
   return String(s || "")
     .toLowerCase()
@@ -19,6 +36,9 @@ function slugify(s) {
     .slice(0, 80);
 }
 
+/*
+ * Normalises text for stable comparison and deduplication.
+ */
 function norm(s) {
   return String(s || "")
     .trim()
@@ -27,15 +47,28 @@ function norm(s) {
 }
 
 // deterministic pseudo-random from an integer seed
+/*
+ * Deterministic pseudo-random generator.
+ *
+ * This keeps generated ads reproducible across script runs.
+ */
 function prand(seed) {
   let x = (seed * 9301 + 49297) % 233280;
   return x / 233280;
 }
 
+/*
+ * Deterministically selects one item from an array.
+ */
 function pick(arr, seed) {
   return arr[Math.floor(prand(seed) * arr.length) % arr.length];
 }
 
+/*
+ * Weighted deterministic selection.
+ *
+ * Used to create realistic category, geo, and price distributions.
+ */
 function weightedPick(items, seed) {
   // items: [{value, weight}]
   const r = prand(seed);
@@ -48,6 +81,11 @@ function weightedPick(items, seed) {
   return items[items.length - 1].value;
 }
 
+/*
+ * Returns current UTC month.
+ *
+ * Used for seasonal category weighting.
+ */
 function monthNowUTC() {
   return new Date().getUTCMonth() + 1; // 1..12
 }
@@ -55,6 +93,16 @@ function monthNowUTC() {
 // ----------------------------
 // realism config
 // ----------------------------
+
+/*
+ * Category definitions for synthetic advertisement generation.
+ *
+ * Each category includes:
+ * - weighted probability
+ * - title themes
+ * - description hooks
+ * - intent clusters for retrieval/evaluation
+ */
 const CATEGORY_DEFS = [
   // Academic/student-heavy (realistic for your assistant)
   {
@@ -281,6 +329,11 @@ const CATEGORY_DEFS = [
 ];
 
 // Seasonal nudges (small bias that makes “trends” feel believable)
+/*
+ * Applies a mild seasonal weight adjustment to selected categories.
+ *
+ * This makes generated ads feel more realistic without eliminating variety.
+ */
 function seasonalBoost(cat, month) {
   // month: 1..12
   // Keep mild boosts so we don’t distort variety too hard.
@@ -294,6 +347,9 @@ function seasonalBoost(cat, month) {
 }
 
 // Geo scope weighting (slightly more realistic than uniform)
+/*
+ * Selects geographic scope using weighted distribution.
+ */
 function pickGeo(seed) {
   const geos = [
     { value: "UK", weight: 0.36 },
@@ -305,6 +361,9 @@ function pickGeo(seed) {
   return weightedPick(geos, seed);
 }
 
+/*
+ * Selects price tier using weighted distribution.
+ */
 function pickTier(seed) {
   const tiers = [
     { value: "budget", weight: 0.46 },
@@ -314,6 +373,9 @@ function pickTier(seed) {
   return weightedPick(tiers, seed);
 }
 
+/*
+ * Selects an advertisement category with seasonal weighting applied.
+ */
 function pickCategory(seed) {
   const m = monthNowUTC();
 
@@ -326,6 +388,16 @@ function pickCategory(seed) {
   return weightedPick(boosted, seed);
 }
 
+/*
+ * Builds one deterministic synthetic advertisement.
+ *
+ * The generated ad includes:
+ * - user-facing fields
+ * - stable image and landing URL
+ * - indexed ad text for retrieval
+ * - ad card JSON for display/evaluation
+ * - metadata used by filtering and ranking
+ */
 function buildAd(i) {
   // choose category with realism weighting + seasonal bias
   const def = pickCategory(i * 17 + 3);
@@ -360,6 +432,10 @@ function buildAd(i) {
   const intentCluster = pick(def.clusters, i * 37 + 4);
 
   // include cluster + category + geo + tier in ad_text for BM25
+  /*
+   * adText is deliberately rich because it becomes the retrieval document
+   * for BM25 and embedding-based matching.
+   */
   const adText = [
     title,
     description,
@@ -371,6 +447,9 @@ function buildAd(i) {
     `Keywords: ${hook}.`
   ].join(" ").trim();
 
+  /*
+   * adCard stores structured display/evaluation metadata.
+   */
   const adCard = {
     offer: offerName,
     desc: description,
@@ -384,6 +463,12 @@ function buildAd(i) {
   };
 
   // Dedupe key MUST ignore landing_url (your earlier issue)
+  /*
+   * Dedupe key is based on stable ad identity fields.
+   *
+   * Landing URL is intentionally excluded because it may contain tracking
+   * parameters that should not create duplicate ads.
+   */
   const dedupeKey = sha256(`${norm(title)}|${norm(description)}|${norm(imageUrl)}`);
 
   return {
@@ -404,6 +489,13 @@ function buildAd(i) {
 async function main() {
   const pool = getPool();
 
+  /*
+   * Script configuration.
+   *
+   * COUNT controls total synthetic ads.
+   * START_AT allows generating from a different deterministic offset.
+   * BATCH controls transaction progress logging and loop grouping.
+   */
   const COUNT = Math.max(1000, Number(process.env.SEED_ADS_COUNT || 1000));
   const START_AT = Number(process.env.SEED_ADS_START_AT || 0);
   const BATCH = Math.max(25, Number(process.env.SEED_ADS_BATCH || 100));
@@ -412,10 +504,16 @@ async function main() {
 
   const conn = await pool.getConnection();
   try {
+    /*
+     * Use one transaction so failed seeding does not leave partial state.
+     */
     await conn.beginTransaction();
 
     let processed = 0;
 
+    /*
+     * Generate and upsert ads in batches.
+     */
     for (let offset = 0; offset < COUNT; offset += BATCH) {
       const batchN = Math.min(BATCH, COUNT - offset);
 
@@ -443,6 +541,9 @@ async function main() {
         const adId = res.insertId;
 
         // UPSERT ad_context_index (PK: ad_id)
+        /*
+         * Store indexed representation used by retrieval and ranking.
+         */
         await conn.execute(
           `
           INSERT INTO ad_context_index
@@ -473,23 +574,39 @@ async function main() {
       console.log(`✅ Progress: ${processed}/${COUNT}`);
     }
 
+    /*
+     * Commit after all ads and index rows are written successfully.
+     */
     await conn.commit();
+
     console.log(`🎉 Done. Processed ${processed} ads (inserted/updated without duplicates).`);
 
+    /*
+     * Verification queries for quick manual validation after seeding.
+     */
     console.log("\n🔎 Verification SQL:");
     console.log("SELECT COUNT(*) AS total_ads FROM ads;");
     console.log("SELECT COUNT(*) AS total_indexed FROM ad_context_index;");
     console.log("SELECT COUNT(*) AS active_ads FROM ads WHERE status='ACTIVE';");
     console.log("SELECT COUNT(*) AS dupes FROM (SELECT dedupe_key, COUNT(*) c FROM ads GROUP BY dedupe_key HAVING c>1) t;");
   } catch (e) {
+    /*
+     * Roll back all inserts/updates if any part of seeding fails.
+     */
     await conn.rollback();
     console.error("❌ Seeding failed, rolled back:", e?.message || e);
     process.exitCode = 1;
   } finally {
+    /*
+     * Always release database connection.
+     */
     conn.release();
   }
 }
 
+/*
+ * Run script and handle unexpected top-level failures.
+ */
 main().catch(err => {
   console.error("❌ seed_ads_unique_1000 crashed:", err);
   process.exit(1);
