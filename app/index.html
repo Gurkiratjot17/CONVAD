@@ -1,60 +1,88 @@
 <!doctype html>
 <html lang="en">
 <head>
+
+  <!-- Basic document metadata -->
   <meta charset="UTF-8" />
+
+  <!-- Responsive viewport for mobile and desktop layouts -->
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  
   <title>CONVAD</title>
+
+  <!-- Main application stylesheet -->
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
+
+  <!-- Main two-column application layout -->
   <div class="layout">
+
+    <!-- Sidebar: branding, actions, conversation list, and user profile strip -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-top">
+
+        <!-- Application logo / home link -->
         <a class="brand brand-logo" href="/" aria-label="CONVAD Home">
           <img src="/assets/CONVAD.PNG" alt="CONVAD" />
         </a>
 
+        <!-- Sidebar action buttons -->
         <button id="newChatBtn" class="btn secondary" type="button">New</button>
         <button id="logoutBtn" class="btn secondary" type="button">Logout</button>
         <button id="themeBtn" class="btn secondary" type="button" title="Toggle theme">🌙</button>
       </div>
 
+      <!-- Conversation list is populated dynamically by app.js -->
       <div id="conversationList" class="conversation-list"></div>
 
-      <!-- ✅ Bottom user strip (ChatGPT-style) -->
+      <!-- Bottom user strip showing authenticated user details -->
 <div id="sidebarUserStrip" class="sidebar-user" aria-label="Logged in user">
   <div class="sidebar-user-left">
+
+    <!-- User avatar is filled dynamically -->
     <div id="sidebarUserAvatar" class="sidebar-user-avatar" aria-hidden="true"></div>
 
+    <!-- User name and email are filled dynamically -->
     <div class="sidebar-user-info">
       <div id="sidebarUserName" class="sidebar-user-name">Loading…</div>
       <div id="sidebarUserEmail" class="sidebar-user-email"></div>
     </div>
   </div>
 
+  <!-- Reserved user menu button -->
   <button id="sidebarUserMenu" class="sidebar-user-menu" type="button" aria-label="User menu">⋯</button>
 </div>
 
 
     </aside>
 
+    <!-- Mobile backdrop used when sidebar drawer is open -->
     <div id="backdrop" class="backdrop"></div>
 
+    <!-- Main chat area -->
     <main class="chat">
       <div class="chat-header">
+
+        <!-- Mobile menu button -->
         <button id="menuBtn" class="btn secondary mobile-only" type="button" aria-label="Open menu">☰</button>
+
+         <!-- Current conversation title -->
         <div id="chatTitle" class="chat-title">New chat</div>
       </div>
 
+       <!-- Chat messages are rendered dynamically by app.js -->
       <div id="messages" class="messages"></div>
 
+      <!-- Message composer -->
       <div class="composer">
-        <textarea id="textInput" rows="1" placeholder="Message CONVAD..."></textarea>
+        <textarea id="textInput" rows="1" placeholder="Ask CONVAD..."></textarea>
         <button id="sendBtn" class="btn primary" type="button">Send</button>
       </div>
     </main>
   </div>
 
+  <!-- Main frontend JavaScript -->
   <script src="/app.js" defer></script>
 </body>
 </html>

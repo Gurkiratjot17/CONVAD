@@ -1,9 +1,16 @@
 // app/app.js
 
+/*
+ * Stores the currently active conversation ID.
+ */
+
 let currentConversationId = null;
 
 document.addEventListener("DOMContentLoaded", () => {
   // ---------- DOM ----------
+    /*
+   * Cache key DOM elements used by the chat interface.
+   */
   const listEl = document.getElementById("conversationList");
   const messagesEl = document.getElementById("messages");
   const titleEl = document.getElementById("chatTitle");
@@ -12,7 +19,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const newBtn = document.getElementById("newChatBtn");
   const logoutBtn = document.getElementById("logoutBtn");
 
-  console.log("✅ app.js loaded", {
+   /*
+   * Development diagnostic log to confirm required elements exist.
+   */
+  console.log("app.js loaded", {
     listEl: !!listEl,
     messagesEl: !!messagesEl,
     titleEl: !!titleEl,
@@ -28,18 +38,27 @@ document.addEventListener("DOMContentLoaded", () => {
   const backdrop = document.getElementById("backdrop");
 
   // --- Theme init ---
+  /*
+   * Initialise theme from localStorage.
+   */
   (function initTheme() {
     const saved = localStorage.getItem("convad_theme");
     const theme = saved === "light" ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", theme);
   })();
 
+  /*
+   * Synchronise theme button icon with the active theme.
+   */
   function syncThemeIcon() {
     const theme = document.documentElement.getAttribute("data-theme") || "dark";
     if (themeBtn) themeBtn.textContent = theme === "dark" ? "🌙" : "☀️";
   }
   syncThemeIcon();
 
+   /*
+   * Toggle between dark and light theme.
+   */
   if (themeBtn) {
     themeBtn.addEventListener("click", () => {
       const current = document.documentElement.getAttribute("data-theme") || "dark";
@@ -51,11 +70,18 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // --- Mobile sidebar drawer ---
+   /*
+   * Opens mobile sidebar drawer.
+   */
   function openSidebar() {
     if (!sidebar || !backdrop) return;
     sidebar.classList.add("open");
     backdrop.classList.add("show");
   }
+
+  /*
+   * Closes mobile sidebar drawer.
+   */
   function closeSidebar() {
     if (!sidebar || !backdrop) return;
     sidebar.classList.remove("open");
@@ -66,14 +92,20 @@ document.addEventListener("DOMContentLoaded", () => {
   if (backdrop) backdrop.addEventListener("click", closeSidebar);
 
   // If critical elements are missing, stop early with a clear error
+  /*
+   * Prevents runtime errors if the page does not contain the required chat UI.
+   */
   if (!messagesEl || !titleEl || !inputEl || !sendBtn) {
     console.error(
-      "❌ Missing required DOM elements. Check your HTML ids: conversationList, messages, chatTitle, textInput, sendBtn."
+      "Missing required DOM elements. Check your HTML ids: conversationList, messages, chatTitle, textInput, sendBtn."
     );
     return;
   }
 
   // ---------- Auth ----------
+   /*
+   * Public pages do not require authentication checks.
+   */
   const publicPaths = ["/login.html", "/register.html", "/verify-otp.html"];
   const path = window.location.pathname;
 
@@ -81,12 +113,15 @@ document.addEventListener("DOMContentLoaded", () => {
   var authHeaders = null;
   var jsonHeaders = null;
 
+  /*
+   * Clears local auth state and redirects user to login page.
+   */
   function handleUnauthorized() {
     localStorage.removeItem("convad_token");
     window.location.href = "/login.html";
   }
 
-  // ✅ function-scoped (NOT block-scoped) so init call works
+  // function-scoped (NOT block-scoped) so init call works
 var ensureUserBadge = function () {
   if (!sidebar) return null;
 
@@ -96,10 +131,14 @@ var ensureUserBadge = function () {
 
   // Fallback: if strip is missing, do NOT create a second one.
   // (This prevents duplicates.)
-  console.warn("⚠️ sidebarUserStrip not found in HTML. Add it to sidebar.");
+  console.warn("sidebarUserStrip not found in HTML. Add it to sidebar.");
   return null;
 };
 
+ /*
+   * Sets sidebar avatar using profile image when available,
+   * otherwise falls back to initials.
+   */
 var setAvatar = function ({ profileImageUrl, firstName, lastName }) {
   // Use HTML id
   const avatar = document.getElementById("sidebarUserAvatar");
@@ -130,6 +169,9 @@ var setAvatar = function ({ profileImageUrl, firstName, lastName }) {
   }
 };
 
+ /*
+   * Loads current authenticated user and updates sidebar identity display.
+   */
 var loadCurrentUser = async function () {
   if (!authHeaders) return;
 
@@ -143,7 +185,7 @@ var loadCurrentUser = async function () {
 
     const data = await res.json().catch(() => null);
     if (!data?.ok || !data.user) {
-      console.warn("⚠️ /api/me returned:", data);
+      console.warn("/api/me returned:", data);
       return;
     }
 
@@ -168,6 +210,9 @@ var loadCurrentUser = async function () {
 };
 
 
+  /*
+   * Enforce authentication on protected pages.
+   */
   if (!publicPaths.includes(path)) {
     const token = localStorage.getItem("convad_token");
     if (!token) {
@@ -180,6 +225,9 @@ var loadCurrentUser = async function () {
   }
 
   // ---------- Helpers ----------
+   /*
+   * Formats timestamps for conversation list display.
+   */
   function fmt(dt) {
     try {
       return new Date(dt).toLocaleString();
@@ -188,6 +236,9 @@ var loadCurrentUser = async function () {
     }
   }
 
+   /*
+   * Escapes HTML to prevent injection when rendering assistant/user content.
+   */
   function escapeHtml(s) {
     return String(s)
       .replaceAll("&", "&amp;")
@@ -195,6 +246,12 @@ var loadCurrentUser = async function () {
       .replaceAll(">", "&gt;");
   }
 
+
+  /*
+   * Very small safe markdown renderer.
+   *
+   * HTML is escaped first, then limited formatting is applied.
+   */
   function renderMarkdownSafe(text) {
     // 1) escape HTML first (prevents injection)
     let s = escapeHtml(text);
@@ -220,9 +277,15 @@ var loadCurrentUser = async function () {
   }
 
   // ---------- Ad Banner ----------
+  /*
+   * Stores latest ad metadata for click/hide/render event logging.
+   */
   let lastAdMeta = null;   // { snapshotId, decisionId, why }
   let lastAds = [];        // ads returned for latest assistant reply
 
+  /*
+   * Ensures a dedicated ad banner host exists below the messages container.
+   */
   function ensureAdHost() {
     // Create a container right under the messages list if it doesn't exist
     let host = document.getElementById("adHost");
@@ -238,6 +301,9 @@ var loadCurrentUser = async function () {
     return host;
   }
 
+  /*
+   * Clears currently displayed ad banner and resets ad metadata.
+   */
   function clearAdBanner({ animate = true } = {}) {
     const host = ensureAdHost();
 
@@ -268,6 +334,14 @@ var loadCurrentUser = async function () {
     }, 220); // slightly > 200ms transition
   }
 
+  /*
+   * Logs ad interaction events to the backend.
+   *
+   * Event types include:
+   * - click
+   * - hide
+   * - render
+   */
   async function logAdEvent(type, ad) {
   if (!ad || !currentConversationId) return;
   const meta = lastAdMeta || {};
@@ -285,7 +359,7 @@ var loadCurrentUser = async function () {
       ? `/api/ads/${ad.adId}/hide`
       : type === "render" 
       ? `/api/ads/${ad.adId}/render`
-      : null; // ✅ NEW
+      : null; 
 
   try {
     const res = await fetch(url, {
@@ -299,6 +373,9 @@ var loadCurrentUser = async function () {
   }
 }
 
+ /*
+   * Renders a sponsored ad card below the chat messages.
+   */
   function renderAdBanner(ads, meta) {
     clearAdBanner();
     const host = ensureAdHost();
@@ -308,7 +385,7 @@ var loadCurrentUser = async function () {
 
     if (!lastAds.length) return;
 
-    // only show the first ad for a clean banner (you can extend later)
+    // only show the first ad for a clean banner 
     const ad = lastAds[0];
 
     const card = document.createElement("div");
@@ -365,6 +442,10 @@ var loadCurrentUser = async function () {
     cta.style.border = "1px solid rgba(255,255,255,0.18)";
     cta.style.color = "inherit";
 
+
+    /*
+     * Log click when user opens the ad landing URL.
+     */
     cta.addEventListener("click", () => {
       logAdEvent("click", ad);
     });
@@ -379,12 +460,18 @@ var loadCurrentUser = async function () {
     hideBtn.style.color = "inherit";
     hideBtn.style.cursor = "pointer";
 
+     /*
+     * Log hide event before removing the banner.
+     */
     hideBtn.addEventListener("click", async () => {
       await logAdEvent("hide", ad);
       clearAdBanner();
     });
 
-    // Optional “Why this ad?” (uses meta.why)
+    // “Why this ad?” (uses meta.why)
+    /*
+     * Shows a lightweight explanation of ad-selection signals.
+     */
     const whyBtn = document.createElement("button");
     whyBtn.type = "button";
     whyBtn.textContent = "Why this?";
@@ -432,10 +519,13 @@ var loadCurrentUser = async function () {
     card.appendChild(body);
 
     host.appendChild(card);
-    // ✅ Log rendered impression only after it is actually added to the DOM
+    // Log rendered impression only after it is actually added to the DOM
     logAdEvent("render", ad);
   }
 
+  /*
+   * Renders a full conversation into the chat window.
+   */
   function renderConversation(conv) {
     titleEl.textContent =
       conv.title || (conv.id ? `Conversation #${conv.id}` : "New chat");
@@ -457,9 +547,12 @@ var loadCurrentUser = async function () {
     clearAdBanner();
   }
 
+  /*
+   * Loads the user's conversation list into the sidebar.
+   */
   async function loadConversationList() {
     if (!listEl) return;
-    if (!authHeaders) return; // ✅ prevent calling on public pages
+    if (!authHeaders) return; // prevent calling on public pages
 
     const res = await fetch("/api/conversations", { headers: authHeaders });
     if (res.status === 401) return handleUnauthorized();
@@ -490,6 +583,9 @@ var loadCurrentUser = async function () {
     }
   }
 
+  /*
+   * Opens a conversation and renders its messages.
+   */
   async function openConversation(id) {
     currentConversationId = id;
 
@@ -506,6 +602,9 @@ var loadCurrentUser = async function () {
     await loadConversationList();
   }
 
+  /*
+   * Auto-resizes textarea as user types.
+   */
   function autoGrow() {
     inputEl.style.height = "auto";
     inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + "px";
@@ -513,6 +612,9 @@ var loadCurrentUser = async function () {
   inputEl.addEventListener("input", autoGrow);
 
   // ---------- Streaming SSE Chat ----------
+   /*
+   * Parses one Server-Sent Events frame.
+   */
   function parseSSEFrame(frame) {
     let eventName = "message";
     const dataLines = [];
@@ -525,8 +627,11 @@ var loadCurrentUser = async function () {
     return { eventName, dataText: dataLines.join("\n").trim() };
   }
 
+  /*
+   * Sends a user message and streams assistant response.
+   */
   async function sendMessage() {
-    console.log("✅ sendMessage called");
+    console.log("sendMessage called");
 
     const text = inputEl.value.trim();
     if (!text) return;
@@ -538,6 +643,9 @@ var loadCurrentUser = async function () {
     clearAdBanner();
 
     // --- User bubble ---
+    /*
+     * Optimistically render user message immediately.
+     */
     const userRow = document.createElement("div");
     userRow.className = "row user";
     const userBubble = document.createElement("div");
@@ -547,6 +655,9 @@ var loadCurrentUser = async function () {
     messagesEl.appendChild(userRow);
 
     // --- Assistant bubble (stream into this) ---
+    /*
+     * Create assistant bubble before streaming tokens arrive.
+     */
     const aRow = document.createElement("div");
     aRow.className = "row assistant";
     const aBubble = document.createElement("div");
@@ -561,6 +672,9 @@ var loadCurrentUser = async function () {
     let streamFinished = false;
 
     try {
+       /*
+       * Start SSE-style streaming request.
+       */
       const res = await fetch("/api/chat/stream", {
         method: "POST",
         headers: jsonHeaders,
@@ -578,6 +692,9 @@ var loadCurrentUser = async function () {
       const decoder = new TextDecoder("utf-8");
       let buffer = "";
 
+      /*
+       * Read streamed chunks until server finishes.
+       */
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -601,6 +718,9 @@ var loadCurrentUser = async function () {
             throw new Error(payload.error || "stream error");
           }
 
+          /*
+           * Done event carries final conversation ID, ads, and metadata.
+           */
           if (eventName === "done") {
             streamFinished = true;
 
@@ -632,6 +752,9 @@ var loadCurrentUser = async function () {
             continue;
           }
 
+          /*
+           * Append streamed assistant token to the visible bubble.
+           */
           if (payload?.token) {
             assistantText += payload.token;
             aBubble.textContent = assistantText;
@@ -640,24 +763,33 @@ var loadCurrentUser = async function () {
         }
       }
 
+       /*
+       * Apply safe markdown rendering after full assistant reply completes.
+       */
       aBubble.innerHTML = renderMarkdownSafe(assistantText);
       messagesEl.scrollTop = messagesEl.scrollHeight;
 
       await loadConversationList();
     } catch (e) {
       console.error("Fetch/stream error:", e);
-      aBubble.textContent = `⚠️ ${e?.message || e}`;
+      aBubble.textContent = `${e?.message || e}`;
     } finally {
       sendBtn.disabled = false;
     }
   }
 
   // ---------- Events ----------
+  /*
+   * Send button click handler.
+   */
   sendBtn.addEventListener("click", (e) => {
     e.preventDefault();
     sendMessage();
   });
 
+  /*
+   * Enter sends message; Shift+Enter creates a new line.
+   */
   inputEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -665,6 +797,9 @@ var loadCurrentUser = async function () {
     }
   });
 
+  /*
+   * Start a new chat session locally.
+   */
   if (newBtn) {
     newBtn.addEventListener("click", async (e) => {
       e.preventDefault();
@@ -677,6 +812,9 @@ var loadCurrentUser = async function () {
     });
   }
 
+   /*
+   * Logout user and clear local session token.
+   */
   if (logoutBtn) {
     logoutBtn.addEventListener("click", async (e) => {
       e.preventDefault();
@@ -696,5 +834,5 @@ var loadCurrentUser = async function () {
 
   // ---------- Init ----------
   loadConversationList();
-  loadCurrentUser(); // ✅ now guaranteed defined + authHeaders set
+  loadCurrentUser(); 
 });

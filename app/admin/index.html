@@ -1,39 +1,59 @@
 <!doctype html>
 <html>
 <head>
+  <!-- Character encoding for correct browser rendering -->
   <meta charset="utf-8" />
+
+  <!-- Responsive viewport for desktop and smaller screens -->
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <!-- Admin-specific stylesheet -->
   <link rel="stylesheet" href="/admin/admin.css" />
   <title>Admin</title>
 </head>
+
 <body>
+  <!-- Admin navigation bar -->
   <header class="topbar">
     <div class="navleft">
+      <!-- Admin brand label -->
       <div class="brand">CONVAD • Admin</div>
       <a class="btn secondary" href="/admin/index.html">Home</a>
       <a class="btn secondary" href="/admin/ads.html">Ads</a>
       <a class="btn secondary" href="/admin/trends.html">Trends</a>
+
+       <!-- Direct database access link for local development/admin inspection -->
       <a class="btn secondary" href="http://localhost:8080/">Database</a>
     </div>
+
     <div class="navright">
+      <!-- Session logout action -->
       <button id="logoutBtn" class="btn secondary" type="button">Logout</button>
+       <!-- Theme toggle controlled by admin.js -->
       <button id="themeToggle" class="btn">☀️ Light</button>
     </div>
   </header>
 
+   <!-- Main admin dashboard content -->
   <main class="wrap">
     <h1>Admin Dashboard</h1>
+
+    <!-- Dashboard purpose statement for evaluation context -->
     <p class="muted">Evaluation snapshot: inventory size, system activity, and where ads are being shown.</p>
 
     <div class="grid">
       <!-- KPIs -->
+       <!-- System-wide KPI card used for monitoring and evaluation evidence -->
       <div class="card cardPad" style="grid-column: span 12;">
         <div class="row" style="justify-content:space-between; align-items:flex-start; gap:12px; margin:0; flex-wrap:wrap;">
           <div>
             <h2>System snapshot</h2>
+
+             <!-- Shows currently selected analytics time window -->
             <div class="muted small" id="windowLabel">Default window: last 7 days</div>
           </div>
 
+          <!-- Time-window selector and shortcut to trends analysis -->
           <div class="row" style="gap:10px; margin:0; align-items:center; flex-wrap:wrap;">
             <select id="rangeSelect" class="input" style="min-width:160px;">
               <option value="7" selected>Last 7 days</option>
@@ -45,6 +65,7 @@
           </div>
         </div>
 
+        <!-- KPI tiles summarising key ad-system metrics -->
         <div class="grid" style="grid-template-columns: repeat(6, 1fr); gap: 12px; margin-top:12px;">
           <div class="kpi">
             <div class="sub">Impressions</div>
@@ -72,19 +93,23 @@
           </div>
         </div>
 
+        <!-- Displays warning/context when chart data is sparse -->
         <div id="dataNote" class="notice" style="display:none; margin-top:12px;"></div>
 
+        <!-- Canvas-based activity chart -->
         <div class="canvasWrap" style="margin-top:12px;">
           <canvas id="activityChart"></canvas>
         </div>
       </div>
 
       <!-- Actions -->
+       <!-- Shortcut to advertisement inventory management -->
       <a class="card cardPad" style="grid-column: span 6;" href="/admin/ads.html">
         <h2>Ads Library</h2>
         <p class="muted">Browse, edit, and inspect analytics for each ad.</p>
       </a>
 
+       <!-- Shortcut to trend and explanation analytics -->
       <a class="card cardPad" style="grid-column: span 6;" href="/admin/trends.html">
         <h2>Trends & Reasons</h2>
         <p class="muted">Identify trending ads and the keywords/contexts driving them.</p>
@@ -92,7 +117,16 @@
     </div>
   </main>
 
+  <!-- Admin dashboard logic -->
   <script type="module">
+
+    /*
+     * Import shared admin utilities:
+     * - theme management
+     * - authenticated API helpers
+     * - chart drawing functions
+     * - date formatting and sparse-data chart selection
+     */
     import {
       initThemeToggle,
       apiGet,
@@ -103,8 +137,14 @@
       shouldUseBars
     } from "./admin.js";
 
+    /*
+     * Initialise persisted admin theme preference.
+     */
     initThemeToggle();
 
+    /*
+     * Cache DOM references used by dashboard rendering.
+     */
     const logoutBtn = document.getElementById("logoutBtn");
     const themeToggle = document.getElementById("themeToggle");
     const rangeSelect = document.getElementById("rangeSelect");
@@ -112,8 +152,14 @@
     const dataNote = document.getElementById("dataNote");
     const canvas = document.getElementById("activityChart");
 
+    /*
+     * Bind logout button to shared logout function.
+     */
     logoutBtn.addEventListener("click", logout);
 
+     /*
+     * Converts numeric day ranges into user-friendly labels.
+     */
     function getRangeText(days) {
       const n = Number(days);
       if (n === 7) return "last 7 days";
@@ -123,39 +169,66 @@
       return `last ${n} days`;
     }
 
+    /*
+     * Loads dashboard metrics and redraws the activity chart.
+     */
     async function load() {
       const days = Number(rangeSelect.value || 7);
       const rangeText = getRangeText(days);
 
+       /*
+       * Update selected time-window label.
+       */
       windowLabel.textContent = `Selected window: ${rangeText}`;
 
       // 1) KPIs + inventory counts
+      /*
+       * Fetch system-wide KPI metrics for selected time window.
+       */
       const m = await apiGet(`/api/admin/metrics?days=${days}`);
 
+      /*
+       * Normalise metric values from API response.
+       */
       const impressionsSelected = Number(m?.events?.impressions_selected || 0);
       const impressionsRendered = Number(m?.events?.impressions_rendered || 0);
       const clicks = Number(m?.events?.clicks || 0);
       const dismisses = Number(m?.events?.dismisses || 0);
       const ctrPct = (Number(m?.events?.ctr || 0) * 100).toFixed(2);
 
+       /*
+       * Populate KPI tiles.
+       */
       document.getElementById("k_impr").textContent = impressionsSelected.toLocaleString();
       document.getElementById("k_rimpr").textContent = impressionsRendered.toLocaleString();
       document.getElementById("k_clicks").textContent = clicks.toLocaleString();
       document.getElementById("k_dismiss").textContent = dismisses.toLocaleString();
       document.getElementById("k_ctr").textContent = `${ctrPct}%`;
 
+      /*
+       * Populate advertisement inventory summary.
+       */
       const activeAds = Number(m?.ads?.active_ads || 0);
       const totalAds = Number(m?.ads?.total_ads || 0);
       document.getElementById("k_ads").textContent = `${activeAds.toLocaleString()} / ${totalAds.toLocaleString()}`;
 
       // 2) Activity chart
+      /*
+       * Fetch daily system activity for the chart.
+       */
       const ts = await apiGet(`/api/admin/trends/timeseries?days=${days}`);
       const rows = ts.rows || [];
 
+      /*
+       * Convert time-series rows into chart labels and metric series.
+       */
       const labels = rows.map(r => formatDayLabel(r.day));
       const imprSeries = rows.map(r => Number(r.impressions || 0));
       const clickSeries = rows.map(r => Number(r.clicks || 0));
 
+      /*
+       * Warn when there is not enough activity for stable visual interpretation.
+       */
       const nonZero = [...imprSeries, ...clickSeries].filter(v => v > 0).length;
       if (labels.length < 4 || nonZero < 4) {
         dataNote.style.display = "block";
@@ -165,6 +238,9 @@
         dataNote.style.display = "none";
       }
 
+       /*
+       * Use bar chart for sparse data, line chart for denser time series.
+       */
       const useBars = shouldUseBars(labels, [imprSeries, clickSeries]);
 
       if (useBars) {
@@ -178,18 +254,27 @@
       }
     }
 
+    /*
+     * Reload dashboard when time range changes.
+     */
     rangeSelect.addEventListener("change", load);
 
     // redraw after theme change
     themeToggle.addEventListener("click", () => setTimeout(load, 50));
 
     // optional: keep this if your chart needs full redraw on resize
+    /*
+     * Debounced resize redraw keeps canvas crisp after viewport changes.
+     */
     let resizeTimer;
     window.addEventListener("resize", () => {
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(load, 120);
     });
 
+     /*
+     * Initial dashboard load.
+     */
     load();
   </script>
 </body>

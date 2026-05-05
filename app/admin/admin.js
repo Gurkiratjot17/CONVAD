@@ -1,7 +1,14 @@
+/*
+ * Reads a query-string parameter from the current page URL.
+ */
 export function qs(name) {
   return new URLSearchParams(window.location.search).get(name);
 }
 
+/*
+ * Escapes HTML-sensitive characters before inserting content into the DOM.
+ * Helps prevent accidental HTML injection in admin-rendered values.
+ */
 export function escapeHtml(s) {
   return String(s || "")
     .replaceAll("&", "&amp;")
@@ -11,6 +18,10 @@ export function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
+/*
+ * Sends a GET request to an admin/API endpoint.
+ * Uses cookies for authenticated admin access.
+ */
 export async function apiGet(path) {
   const res = await fetch(path, { credentials: "include" });
   const data = await res.json().catch(() => ({}));
@@ -18,6 +29,9 @@ export async function apiGet(path) {
   return data;
 }
 
+/*
+ * Sends a JSON request to an admin/API endpoint.
+ */
 export async function apiSend(path, method, bodyObj) {
   const res = await fetch(path, {
     method,
@@ -30,6 +44,9 @@ export async function apiSend(path, method, bodyObj) {
   return data;
 }
 
+/*
+ * Logs out the current user and clears legacy localStorage token state.
+ */
 export async function logout() {
   try {
     await apiSend("/api/auth/logout", "POST");
@@ -48,12 +65,19 @@ export async function logout() {
 /* -----------------------------
    Theme
 ------------------------------ */
+/*
+ * Applies the selected admin theme and persists preference locally.
+ */
 export function applyTheme(theme) {
   const root = document.documentElement;
   root.setAttribute("data-theme", theme);
   localStorage.setItem("adminTheme", theme);
 }
 
+/*
+ * Initialises the admin theme toggle button.
+ * Falls back to system colour preference when no saved theme exists.
+ */
 export function initThemeToggle(buttonId = "themeToggle") {
   const saved = localStorage.getItem("adminTheme");
   const prefersLight =
@@ -64,6 +88,9 @@ export function initThemeToggle(buttonId = "themeToggle") {
   const btn = document.getElementById(buttonId);
   if (!btn) return;
 
+  /*
+   * Updates button label to show the next available theme action.
+   */
   const renderLabel = () => {
     const t = document.documentElement.getAttribute("data-theme") || "dark";
     btn.textContent = t === "light" ? "🌙 Dark" : "☀️ Light";
@@ -80,6 +107,9 @@ export function initThemeToggle(buttonId = "themeToggle") {
 /* -----------------------------
    Formatting helpers
 ------------------------------ */
+/*
+ * Formats a date into a compact day label for chart axes and tables.
+ */
 export function formatDayLabel(dayValue) {
   const d = dayValue instanceof Date ? dayValue : new Date(dayValue);
   if (Number.isNaN(d.getTime())) return String(dayValue || "");
@@ -102,6 +132,10 @@ export function fillMissingDays(rows, daysBack) {
   const start = new Date(end);
   start.setDate(end.getDate() - (Math.max(1, Number(daysBack || rows.length)) - 1));
 
+  /*
+   * Insert missing dates with zero-value metrics so charts represent
+   * continuous time rather than only active days.
+   */
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const key = d.toISOString().slice(0, 10);
     const existing = map.get(key);
@@ -110,6 +144,10 @@ export function fillMissingDays(rows, daysBack) {
   return out;
 }
 
+/*
+ * Chooses bar chart rendering when data is sparse.
+ * This avoids misleading line trends for very limited activity.
+ */
 export function shouldUseBars(labels, seriesOrValues) {
   const n = Array.isArray(labels) ? labels.length : 0;
   if (n <= 4) return true;
@@ -126,28 +164,46 @@ export function shouldUseBars(labels, seriesOrValues) {
 /* -----------------------------
    Charts (no libraries)
 ------------------------------ */
+/*
+ * Reads a CSS custom property from the active theme.
+ */
 function getCssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
+/*
+ * Clears the canvas before redrawing.
+ */
 function clearCanvas(ctx, w, h) {
   ctx.clearRect(0, 0, w, h);
 }
 
+/*
+ * Rounds a maximum value up to a visually clean axis bound.
+ */
 function niceMax(v) {
   if (v <= 0) return 1;
   const p = Math.pow(10, Math.floor(Math.log10(v)));
   return Math.ceil(v / p) * p;
 }
 
+/*
+ * Restricts a value between lower and upper bounds.
+ */
 function clamp(v, a, b) {
   return Math.max(a, Math.min(b, v));
 }
 
+/*
+ * Safely measures text width for canvas label layout.
+ */
 function measureText(ctx, text) {
   try { return ctx.measureText(text).width; } catch { return text.length * 7; }
 }
 
+/*
+ * Calculates how many x-axis labels to skip based on available pixel width.
+ */
 function pickSkipByPixel(ctx, labels, availablePx, minGapPx) {
   // decide label skip based on label widths so they don't overlap
   if (!labels.length) return 1;
@@ -157,6 +213,9 @@ function pickSkipByPixel(ctx, labels, availablePx, minGapPx) {
   return Math.max(1, Math.ceil(labels.length / maxLabels));
 }
 
+/*
+ * Draws a small legend for multi-series charts.
+ */
 function drawLegend(ctx, x, y, items, dpr) {
   if (!items?.length) return;
   const text = getCssVar("--muted") || "#a9b8da";
@@ -179,21 +238,35 @@ function drawLegend(ctx, x, y, items, dpr) {
   });
 }
 
+/*
+ * Draws a responsive multi-series line chart on a canvas.
+ *
+ * Used by admin analytics views for time-series performance.
+ */
 export function drawLineChart(canvas, series, labels, opts = {}) {
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
   const dpr = window.devicePixelRatio || 1;
 
+  /*
+   * Scale canvas for high-DPI displays.
+   */
   const w = (canvas.width = Math.floor(canvas.clientWidth * dpr));
   const h = (canvas.height = Math.floor(canvas.clientHeight * dpr));
   clearCanvas(ctx, w, h);
 
+  /*
+   * Chart layout bounds.
+   */
   const pad = 18 * dpr;
   const left = pad + 34 * dpr;
   const right = w - pad;
   const top = pad + 8 * dpr;
   const bottom = h - pad - 26 * dpr;
 
+  /*
+   * Theme-aware chart colours.
+   */
   const grid = getCssVar("--line") || "#23365f";
   const text = getCssVar("--muted") || "#a9b8da";
   const axis = grid;
@@ -210,6 +283,9 @@ export function drawLineChart(canvas, series, labels, opts = {}) {
     ? opts.names
     : series.map((_, i) => `Series ${i + 1}`);
 
+    /*
+   * Compute y-axis scale from all series values.
+   */
   const flat = series.flat().filter(x => Number.isFinite(x));
   const maxV = niceMax(Math.max(0, ...flat));
   const minV = 0;
@@ -240,6 +316,9 @@ export function drawLineChart(canvas, series, labels, opts = {}) {
   ctx.fillStyle = text;
   ctx.font = `${12 * dpr}px system-ui`;
 
+   /*
+   * Draw horizontal grid lines and y-axis labels.
+   */
   for (let i = 0; i <= ticks; i++) {
     const y = bottom - (i / ticks) * (bottom - top);
 
@@ -264,6 +343,9 @@ export function drawLineChart(canvas, series, labels, opts = {}) {
   ctx.stroke();
 
   // plot each series + points
+  /*
+   * Plot every metric series as a separate line with point markers.
+   */
   series.forEach((arr, si) => {
     const c = colors[si % colors.length];
     ctx.strokeStyle = c;
@@ -294,6 +376,9 @@ export function drawLineChart(canvas, series, labels, opts = {}) {
   ctx.font = `${11 * dpr}px system-ui`;
   const skip = pickSkipByPixel(ctx, labels, right - left, 14 * dpr);
 
+  /*
+   * Draw x-axis labels with automatic skipping to avoid overlap.
+   */
   labels.forEach((lab, i) => {
     if (i % skip !== 0 && i !== labels.length - 1) return;
     const x = left + i * xStep;
@@ -303,25 +388,42 @@ export function drawLineChart(canvas, series, labels, opts = {}) {
   });
 }
 
+/*
+ * Draws a responsive single-series bar chart on a canvas.
+ *
+ * Used when activity is sparse and a line chart would imply false continuity.
+ */
 export function drawBarChart(canvas, values, labels, opts = {}) {
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
   const dpr = window.devicePixelRatio || 1;
 
+  /*
+   * Scale canvas for high-DPI displays.
+   */
   const w = (canvas.width = Math.floor(canvas.clientWidth * dpr));
   const h = (canvas.height = Math.floor(canvas.clientHeight * dpr));
   clearCanvas(ctx, w, h);
 
+  /*
+   * Chart layout bounds.
+   */
   const pad = 18 * dpr;
   const left = pad + 34 * dpr;
   const right = w - pad;
   const top = pad + 8 * dpr;
   const bottom = h - pad - 26 * dpr;
 
+   /*
+   * Theme-aware chart colours.
+   */
   const grid = getCssVar("--line") || "#23365f";
   const text = getCssVar("--muted") || "#a9b8da";
   const fill = getCssVar("--link") || "#8ab4ff";
 
+  /*
+   * Calculate y-axis scaling.
+   */
   const maxV = niceMax(Math.max(0, ...values.map(v => Number(v) || 0)));
   const yScale = (bottom - top) / (maxV || 1);
 
@@ -341,6 +443,9 @@ export function drawBarChart(canvas, values, labels, opts = {}) {
   ctx.fillStyle = text;
   ctx.font = `${12 * dpr}px system-ui`;
 
+  /*
+   * Draw grid lines and y-axis tick labels.
+   */
   for (let i = 0; i <= ticks; i++) {
     const y = bottom - (i / ticks) * (bottom - top);
 
@@ -363,6 +468,9 @@ export function drawBarChart(canvas, values, labels, opts = {}) {
   ctx.stroke();
 
   // bars
+  /*
+   * Draw each value as one bar.
+   */
   const n = Math.max(1, values.length);
   const barW = (right - left) / n;
   ctx.fillStyle = fill;
@@ -381,6 +489,9 @@ export function drawBarChart(canvas, values, labels, opts = {}) {
   ctx.font = `${11 * dpr}px system-ui`;
   const skip = pickSkipByPixel(ctx, labels, right - left, 14 * dpr);
 
+  /*
+   * Draw x-axis labels with automatic skipping.
+   */
   labels.forEach((lab, i) => {
     if (i % skip !== 0 && i !== labels.length - 1) return;
     const x = left + i * barW + barW / 2;

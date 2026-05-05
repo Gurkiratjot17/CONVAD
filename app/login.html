@@ -1,12 +1,19 @@
 <!doctype html>
 <html>
 <head>
+  <!-- Basic document metadata -->
   <meta charset="utf-8" />
+
+  <!-- Responsive viewport for mobile and desktop layouts -->
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Login — CONVAD</title>
+
+   <!-- Shared application stylesheet -->
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
+
+  <!-- Fixed theme toggle button for the login page -->
     <button 
   id="themeBtn" 
   class="btn secondary" 
@@ -16,16 +23,22 @@
 >
   🌙
 </button>
+
+<!-- Authentication page wrapper -->
   <div class="auth-wrap">
-    <!-- ✅ Logo ABOVE the card -->
+    <!-- Logo displayed above the login card -->
     <div class="auth-logo">
       <img src="/assets/CONVAD.png" alt="CONVAD logo" />
     </div>
+
+     <!-- Login form card -->
     <div class="auth-card">
       <h2>Login</h2>
 
+       <!-- Email input -->
       <input id="email" type="email" placeholder="Email" required />
 
+      <!-- Password input with visibility toggle -->
       <div class="password-field">
         <input id="password" type="password" placeholder="Password" required />
         <button
@@ -37,17 +50,23 @@
         >👁️</button>
       </div>
 
+      <!-- Login action -->
       <button id="loginBtn" type="button" class="btn primary">Login</button>
 
+      <!-- Link to registration page -->
       <p class="auth-meta">
         New here? <a href="/register.html">Create an account</a>
       </p>
 
+      <!-- Runtime login messages/errors -->
       <div id="msg" class="auth-msg"></div>
     </div>
   </div>
 
   <script>
+    /*
+     * Cache login form elements.
+     */
     const msg = document.getElementById("msg");
     const loginBtn = document.getElementById("loginBtn");
 
@@ -63,6 +82,11 @@
       toggleBtn.title = hidden ? "Hide password" : "Show password";
     });
 
+    /*
+     * Login button handler.
+     *
+     * Sends credentials to backend and redirects based on returned role.
+     */
     loginBtn.addEventListener("click", async () => {
       msg.textContent = "";
 
@@ -78,6 +102,9 @@
           body: JSON.stringify(body),
         });
 
+        /*
+         * Read raw text first so malformed JSON responses can be diagnosed.
+         */
         const text = await res.text();
         let data;
         try {
@@ -86,17 +113,25 @@
           throw new Error(`Server returned ${res.status}: ${text.slice(0, 120)}`);
         }
 
+        /*
+         * Display backend authentication errors.
+         */
         if (!data.ok) {
           msg.textContent = data.error || "Login failed";
           return;
         }
 
         // Keep existing behavior (some parts of your app may rely on this)
+         /*
+         * Store token for frontend API requests.
+         */
         if (data.token) {
           localStorage.setItem("convad_token", data.token);
         }
 
-        // ✅ NEW: role-aware redirect
+        /*
+         * Redirect admins to admin portal; regular users to chat UI.
+         */
         if (data.role === "ADMIN") {
           window.location.href = "/admin/index.html";
         } else {
@@ -108,6 +143,7 @@
       }
     });
   </script>
+  <!-- Shared frontend script for theme support and common UI behaviour -->
    <script src="/app.js" defer></script>
 </body>
 </html>

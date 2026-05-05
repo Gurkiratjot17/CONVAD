@@ -1,26 +1,58 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
+  <!-- Character encoding for proper text rendering -->
   <meta charset="utf-8" />
+
+  <!-- Responsive layout for mobile and desktop -->
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Terms & Conditions — CONVAD</title>
-  <link rel="stylesheet" href="/styles.css" />
-</head>
-<body>
-  <div class="auth-wrap">
-    <div class="terms-card">
-      <meta name="description" content="Terms and Conditions for CONVAD (Academic Prototype)." />
+
+  <!-- Page description (used by search engines and previews) -->
   <meta name="description" content="Terms and Conditions for CONVAD (Academic Prototype)." />
+
+  <!-- Page title -->
+  <title>Terms & Conditions — CONVAD</title>
+
+  <!-- Global stylesheet -->
+  <link rel="stylesheet" href="/styles.css" />
+
+  <!-- Page-specific styling (kept minimal and readable) -->
   <style>
+    /* Allow browser to automatically adapt to light/dark themes */
     :root { color-scheme: light dark; }
-    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.55; }
-    header, main, footer { max-width: 920px; margin: 0 auto; padding: 24px; }
+
+    /* Base typography and spacing */
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      line-height: 1.55;
+    }
+
+    /* Constrain width for readability (important for long legal text) */
+    header, main, footer {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
     header { padding-top: 40px; padding-bottom: 8px; }
+
+    /* Title styling */
     h1 { font-size: 2rem; margin: 0 0 8px; }
+
+    /* Subtitle / metadata */
     .meta { opacity: 0.8; margin: 0 0 20px; }
+
+    /* Section headings */
     h2 { margin-top: 28px; font-size: 1.25rem; }
+
+    /* Paragraphs and list items */
     p, li { font-size: 1rem; }
+
+    /* List spacing */
     ul { padding-left: 20px; }
+
+    /* Highlight card for important notices */
     .card {
       border: 1px solid rgba(127,127,127,0.25);
       border-radius: 12px;
@@ -28,114 +60,163 @@
       background: rgba(127,127,127,0.06);
       margin: 18px 0;
     }
+
+    /* Keep links consistent with theme */
     a { color: inherit; }
-    footer { padding-top: 8px; padding-bottom: 40px; opacity: 0.85; }
+
+    /* Footer styling */
+    footer {
+      padding-top: 8px;
+      padding-bottom: 40px;
+      opacity: 0.85;
+    }
+
+    /* Smaller helper text */
     .small { font-size: 0.92rem; }
-    .divider { height: 1px; background: rgba(127,127,127,0.25); margin: 24px 0; }
+
+    /* Divider for visual separation */
+    .divider {
+      height: 1px;
+      background: rgba(127,127,127,0.25);
+      margin: 24px 0;
+    }
   </style>
 </head>
 
 <body>
-  <button id="themeBtn" class="btn secondary" type="button" aria-label="Toggle theme" style="position:fixed; top:16px; right:16px; z-index:1000;">
+  <!-- Theme toggle button (reuses global JS logic in app.js) -->
+  <button
+    id="themeBtn"
+    class="btn secondary"
+    type="button"
+    aria-label="Toggle theme"
+    style="position:fixed; top:16px; right:16px; z-index:1000;"
+  >
     🌙
   </button>
-  <header>
-    <h1>Terms and Conditions</h1>
-    <p class="meta">
-      CONVAD (Academic Prototype) — Last updated: <time datetime="2026-01-24">24 January 2026</time>
-    </p>
 
-    <div class="card">
-      <p class="small">
-        CONVAD is an academic prototype. It may generate automated conversational responses and may display contextual advertisements.
-        If you do not agree with these Terms, do not use the Service.
-      </p>
-    </div>
-  </header>
+  <!-- Wrapper reused from auth pages for consistent UI layout -->
+  <div class="auth-wrap">
+    <div class="terms-card">
 
-  <main>
-    <h2>1. About the Service</h2>
-    <p>
-      CONVAD (the “Service”) is provided for research, evaluation, and demonstration purposes in an academic context.
-      The Service generates automated conversational responses and may display advertisements selected based on immediate conversational context.
-    </p>
+      <!-- ================= HEADER ================= -->
+      <header>
+        <h1>Terms and Conditions</h1>
 
-    <h2>2. Eligibility and Acceptable Use</h2>
-    <ul>
-      <li>You must use the Service lawfully and must not submit unlawful, harmful, abusive, or infringing content.</li>
-      <li>You must not attempt to interfere with the Service’s operation, security, or integrity (including unauthorised access attempts).</li>
-    </ul>
+        <!-- Last updated timestamp (important for legal clarity) -->
+        <p class="meta">
+          CONVAD (Academic Prototype) — Last updated:
+          <time datetime="2026-01-24">24 January 2026</time>
+        </p>
 
-    <h2>3. Advertising within the Service</h2>
-    <ul>
-      <li>The Service may display contextual advertisements presented separately from the assistant’s response.</li>
-      <li>Advertisement selection is intended to be derived from the current conversational context rather than long-term behavioural profiling.</li>
-      <li>Advertisement matching may be imperfect. No guarantee is provided as to relevance, accuracy, availability, or suitability.</li>
-    </ul>
+        <!-- Introductory notice -->
+        <div class="card">
+          <p class="small">
+            CONVAD is an academic prototype. It may generate automated conversational responses and may display contextual advertisements.
+            If you do not agree with these Terms, do not use the Service.
+          </p>
+        </div>
+      </header>
 
-    <h2>4. No Professional Advice</h2>
-    <p>
-      The Service is not a substitute for professional advice. Outputs may be inaccurate, incomplete, or misleading.
-      You must not rely on the Service for medical, legal, financial, or other professional decisions.
-    </p>
+      <!-- ================= MAIN CONTENT ================= -->
+      <main>
 
-    <h2>5. Intellectual Property</h2>
-    <ul>
-      <li>The Service (including software, interface, and related materials) remains subject to applicable intellectual property rights.</li>
-      <li>
-        You remain responsible for content you submit. You grant the project a limited right to process your content
-        to operate and evaluate the Service.
-      </li>
-    </ul>
+        <!-- Section 1 -->
+        <h2>1. About the Service</h2>
+        <p>
+          CONVAD (the “Service”) is provided for research, evaluation, and demonstration purposes in an academic context.
+          The Service generates automated conversational responses and may display advertisements selected based on immediate conversational context.
+        </p>
 
-    <h2>6. Availability and Changes</h2>
-    <ul>
-      <li>The Service may be modified, suspended, or withdrawn at any time to support development and evaluation.</li>
-      <li>These Terms may be updated as the project evolves. Continued use constitutes acceptance of updated Terms.</li>
-    </ul>
+        <!-- Section 2 -->
+        <h2>2. Eligibility and Acceptable Use</h2>
+        <ul>
+          <li>You must use the Service lawfully and must not submit unlawful, harmful, abusive, or infringing content.</li>
+          <li>You must not attempt to interfere with the Service’s operation, security, or integrity, including unauthorised access attempts.</li>
+        </ul>
 
-    <h2>7. Disclaimers and Limitation of Liability</h2>
-    <p>
-      The Service is provided “as is” and “as available” without warranties of any kind, to the fullest extent permitted by law.
-      The project is not liable for losses arising from reliance on outputs, advertisement content, or service interruptions.
-    </p>
+        <!-- Section 3 -->
+        <h2>3. Advertising within the Service</h2>
+        <ul>
+          <li>The Service may display contextual advertisements presented separately from the assistant’s response.</li>
+          <li>Advertisement selection is intended to be derived from the current conversational context rather than long-term behavioural profiling.</li>
+          <li>Advertisement matching may be imperfect. No guarantee is provided as to relevance, accuracy, availability, or suitability.</li>
+        </ul>
 
-    <h2>8. Privacy</h2>
-    <p>
-      Personal data processing is described in the separate <a href="privacy.html">Privacy Notice</a>.
-      This includes information about what data is processed, why it is processed, and your rights.
-    </p>
+        <!-- Section 4 -->
+        <h2>4. No Professional Advice</h2>
+        <p>
+          The Service is not a substitute for professional advice. Outputs may be inaccurate, incomplete, or misleading.
+          You must not rely on the Service for medical, legal, financial, or other professional decisions.
+        </p>
 
-    <div class="divider"></div>
+        <!-- Section 5 -->
+        <h2>5. Intellectual Property</h2>
+        <ul>
+          <li>The Service, including software, interface, and related materials, remains subject to applicable intellectual property rights.</li>
+          <li>
+            You remain responsible for content you submit. You grant the project a limited right to process your content
+            to operate and evaluate the Service.
+          </li>
+        </ul>
 
-    <h2>9. Contact</h2>
-    <p>
-      For questions about the Service or these Terms, contact the project owner via the supervising academic institution.
-    </p>
+        <!-- Section 6 -->
+        <h2>6. Availability and Changes</h2>
+        <ul>
+          <li>The Service may be modified, suspended, or withdrawn at any time to support development and evaluation.</li>
+          <li>These Terms may be updated as the project evolves. Continued use constitutes acceptance of updated Terms.</li>
+        </ul>
 
-    <div class="card">
-      <p class="small">
-        <strong>Note for academic use:</strong> If you deploy this outside a controlled academic environment (public users, third-party ads,
-        analytics, or external LLM providers), you will likely need stronger consent/opt-out flows, fuller controller details,
-        and clearer third-party processing disclosures.
-      </p>
-    </div>
-  </main>
+        <!-- Section 7 -->
+        <h2>7. Disclaimers and Limitation of Liability</h2>
+        <p>
+          The Service is provided “as is” and “as available” without warranties of any kind, to the fullest extent permitted by law.
+          The project is not liable for losses arising from reliance on outputs, advertisement content, or service interruptions.
+        </p>
 
-  <footer>
-    <p class="small">
-      © <span id="year"></span> CONVAD (Academic Prototype). All rights reserved where applicable.
-    </p>
-  </footer>
+        <!-- Section 8 -->
+        <h2>8. Privacy</h2>
+        <p>
+          Personal data processing is described in the separate <a href="privacy.html">Privacy Notice</a>.
+          This includes information about what data is processed, why it is processed, and your rights.
+        </p>
 
-  <script>
-    document.getElementById("year").textContent = String(new Date().getFullYear());
-  </script>
-    <script src="/app.js" defer></script>
-</body>
-</html>
+        <!-- Visual separation -->
+        <div class="divider"></div>
+
+        <!-- Section 9 -->
+        <h2>9. Contact</h2>
+        <p>
+          For questions about the Service or these Terms, contact the project owner via the supervising academic institution.
+        </p>
+
+        <!-- Academic disclaimer (important for your FYP context) -->
+        <div class="card">
+          <p class="small">
+            <strong>Note for academic use:</strong> If you deploy this outside a controlled academic environment, such as with public users,
+            third-party ads, analytics, or external LLM providers, you will likely need stronger consent mechanisms, clearer data disclosures,
+            and formal compliance measures.
+          </p>
+        </div>
+
+      </main>
+
+      <!-- ================= FOOTER ================= -->
+      <footer>
+        <p class="small">
+          © <span id="year"></span> CONVAD (Academic Prototype). All rights reserved where applicable.
+        </p>
+      </footer>
 
     </div>
   </div>
+
+  <!-- Dynamically insert current year -->
+  <script>
+    document.getElementById("year").textContent = String(new Date().getFullYear());
+  </script>
+
+  <!-- Shared app script (handles theme toggle, etc.) -->
+  <script src="/app.js" defer></script>
 </body>
 </html>

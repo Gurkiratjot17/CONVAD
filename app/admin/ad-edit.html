@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="/admin/admin.css" />
   <title>Admin • Edit Ad</title>
 
-  <!-- ✅ Layout-only override (keeps everything else intact) -->
+  <!-- Layout-only override (keeps everything else intact) -->
   <style>
     .editLayout{
       display:grid;
@@ -111,7 +111,7 @@
     import { qs, apiGet, apiSend, initThemeToggle, logout } from "./admin.js";
     initThemeToggle();
 
-    // ✅ Logout
+    // Logout
     document.getElementById("logoutBtn").addEventListener("click", logout);
 
     const adId = qs("id");

@@ -1,12 +1,21 @@
 <!doctype html>
 <html>
 <head>
+  <!-- Defines character encoding to ensure correct rendering across browsers -->
   <meta charset="utf-8" />
+
+  <!-- Enables responsive design for mobile and desktop devices -->
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <!-- Page title shown in browser tab -->
   <title>Register — CONVAD</title>
+
+   <!-- Global stylesheet for consistent UI styling -->
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
+
+   <!-- Theme toggle button (reuses shared logic in app.js for light/dark mode) -->
   <button 
   id="themeBtn" 
   class="btn secondary" 
@@ -16,20 +25,25 @@
 >
   🌙
 </button>
+
+  <!-- Wrapper used across authentication pages for layout consistency -->
   <div class="auth-wrap">
-    <!-- ✅ Logo ABOVE the card -->
+     <!-- Branding: visual identity placed above the form for recognition -->
     <div class="auth-logo">
       <img src="/assets/CONVAD.png" alt="CONVAD logo" />
     </div>
+
+    <!-- Main registration card -->
     <div class="auth-card">
       
-
-
+      <!-- Section title -->
       <h2>Create account</h2>
 
+      <!-- User identity inputs (non-required but useful for personalization) -->
       <input id="firstName" placeholder="First name" />
       <input id="lastName" placeholder="Last name" />
 
+      <!-- Email input (required field for authentication and communication) -->
       <input
         id="email"
         type="email"
@@ -37,6 +51,7 @@
         required
       />
 
+      <!-- Password input with visibility toggle (UX + accessibility consideration) -->
       <div class="password-field">
         <input
           id="password"
@@ -53,7 +68,8 @@
           title="Show password"
         >👁️</button>
       </div>
-
+ 
+      <!-- Confirm password input to reduce user error -->
       <div class="password-field">
         <input
           id="confirmPassword"
@@ -70,18 +86,21 @@
         >👁️</button>
       </div>
 
+      <!-- Terms acceptance (critical for legal compliance and ethical transparency) -->
       <div class="terms-row">
-  <label class="terms" for="acceptTerms">
-    <input id="acceptTerms" type="checkbox" />
-    <span>I agree to the</span>
-  </label>
+        <label class="terms" for="acceptTerms">
+          <input id="acceptTerms" type="checkbox" />
+          <span>I agree to the</span>
+        </label>
 
-  <a class="terms-link" href="/terms.html" target="_blank" rel="noopener">
-    Terms &amp; Conditions
-  </a>
-</div>
+        <!-- External link ensures users can review terms before consenting -->
+        <a class="terms-link" href="/terms.html" target="_blank" rel="noopener">
+          Terms &amp; Conditions
+        </a>
+      </div>
 
 
+      <!-- Submit button for registration -->
       <button
         id="registerBtn"
         type="button"
@@ -90,16 +109,19 @@
         Register
       </button>
 
+      <!-- Navigation for existing users -->
       <p class="auth-meta">
         Already have an account?
         <a href="/login.html">Login</a>
       </p>
 
+      <!-- Feedback container for validation and server responses -->
       <div id="msg" class="auth-msg"></div>
     </div>
   </div>
 
   <script>
+    // Cache DOM references for performance and readability
     const msg = document.getElementById("msg");
     const registerBtn = document.getElementById("registerBtn");
 
@@ -114,6 +136,7 @@
     document.getElementById("togglePassword").addEventListener("click", (e) => {
       const hidden = passwordInput.type === "password";
       passwordInput.type = hidden ? "text" : "password";
+      // Dynamically update icon and accessibility labels based on state
       e.target.textContent = hidden ? "🙈" : "👁️";
       e.target.setAttribute("aria-label", hidden ? "Hide password" : "Show password");
       e.target.title = hidden ? "Hide password" : "Show password";
@@ -129,11 +152,15 @@
 
     // ----------------------------
     // Validation helpers
+    // Client-side validation improves UX but must not replace server validation
     // ----------------------------
+
+    // Basic email validation using regex (not exhaustive but practical)
     function isValidEmail(email) {
       return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
     }
 
+    // Enforces password complexity for basic security standards
     function isStrongPassword(pw) {
       return (
         pw.length >= 8 &&
@@ -154,22 +181,26 @@
       const password = passwordInput.value;
       const confirmPassword = confirmInput.value;
 
+      // Email validation
       if (!isValidEmail(email)) {
         msg.textContent = "Please enter a valid email address.";
         return;
       }
 
+      // Password strength enforcement
       if (!isStrongPassword(password)) {
         msg.textContent =
           "Password must be at least 8 characters and include uppercase, lowercase, number, and symbol.";
         return;
       }
 
+      // Ensure password confirmation matches to reduce user errors
       if (password !== confirmPassword) {
         msg.textContent = "Passwords do not match.";
         return;
       }
 
+      // Explicit consent check (critical for legal/ethical compliance)
       const acceptTerms = document.getElementById("acceptTerms")?.checked === true;
 
       if (!acceptTerms) {
@@ -177,6 +208,7 @@
         return;
       }
 
+      // Prepare request payload with all necessary fields for registration
       const body = {
         firstName: document.getElementById("firstName").value.trim(),
         lastName: document.getElementById("lastName").value.trim(),
@@ -186,12 +218,14 @@
       };
 
       try {
+        // Send registration request to backend
         const res = await fetch("/api/auth/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
 
+        // Handle response parsing safely
         const text = await res.text();
         let data;
         try {
@@ -200,14 +234,17 @@
           throw new Error(`Server returned ${res.status}`);
         }
 
+        // Handle API error responses gracefully
         if (!data.ok) {
           msg.textContent = data.error || "Registration failed";
           return;
         }
 
-        // Save pending registration and go to OTP page
+        // Store temporary registration state for OTP verification step
         localStorage.setItem("convad_pending_id", String(data.pendingId));
         localStorage.setItem("convad_pending_email", email);
+
+        // Redirect user to OTP verification page
         window.location.href = "/verify-otp.html";
       } catch (err) {
         console.error(err);
@@ -215,6 +252,7 @@
       }
     });
   </script>
+   <!-- Shared application script (handles theme + global behaviors) -->
     <script src="/app.js" defer></script>
 </body>
 </html>
